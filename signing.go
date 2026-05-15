@@ -68,6 +68,8 @@ type SignTransferParams struct {
 
 // SignPaymentParams holds parameters for SignAuthorize and SignCharge.
 // Obtain the Nonce from client.Payments.AuthorizeNonce or ChargeNonce.
+// The contract hardcodes validAfter=0 and validBefore=Payment.AuthorizationExpiry;
+// these are not configurable by the caller.
 type SignPaymentParams struct {
 	// PrivateKey is the 32-byte secp256k1 private key of the payer.
 	// Use HexToPrivateKey to convert from a 0x-prefixed hex string.
@@ -79,10 +81,6 @@ type SignPaymentParams struct {
 	Nonce           Bytes32
 	ContractAddress Address
 	TokenDomain     TokenDomain
-	// ValidAfter is the earliest valid timestamp. nil means 0 (immediate).
-	ValidAfter *big.Int
-	// ValidBefore is the latest valid timestamp. nil defaults to Payment.AuthorizationExpiry.
-	ValidBefore *big.Int
 }
 
 // ================================================================
@@ -228,16 +226,8 @@ func SignTransferWithAuthorization(privateKey []byte, domain TokenDomain, params
 //	    Payment: payment, Amount: "50000000", V: sig.V, R: sig.R, S: sig.S,
 //	})
 func SignAuthorize(params SignPaymentParams) (Eip3009Signature, error) {
-	validAfter := params.ValidAfter
-	if validAfter == nil {
-		validAfter = new(big.Int)
-	}
-	validBefore := params.ValidBefore
-	if validBefore == nil {
-		validBefore = big.NewInt(params.Payment.AuthorizationExpiry)
-	}
 	digest := buildDigest(params.TokenDomain, params.Payment.Payer, params.ContractAddress,
-		params.Amount, validAfter, validBefore, params.Nonce)
+		params.Amount, new(big.Int), big.NewInt(params.Payment.AuthorizationExpiry), params.Nonce)
 	return doSign(params.PrivateKey, digest)
 }
 
@@ -249,15 +239,7 @@ func SignAuthorize(params SignPaymentParams) (Eip3009Signature, error) {
 //	    Nonce: nonce.Nonce, ContractAddress: contractAddr, TokenDomain: domain,
 //	})
 func SignCharge(params SignPaymentParams) (Eip3009Signature, error) {
-	validAfter := params.ValidAfter
-	if validAfter == nil {
-		validAfter = new(big.Int)
-	}
-	validBefore := params.ValidBefore
-	if validBefore == nil {
-		validBefore = big.NewInt(params.Payment.AuthorizationExpiry)
-	}
 	digest := buildDigest(params.TokenDomain, params.Payment.Payer, params.ContractAddress,
-		params.Amount, validAfter, validBefore, params.Nonce)
+		params.Amount, new(big.Int), big.NewInt(params.Payment.AuthorizationExpiry), params.Nonce)
 	return doSign(params.PrivateKey, digest)
 }
