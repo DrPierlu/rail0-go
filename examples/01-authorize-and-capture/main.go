@@ -59,8 +59,12 @@ func main() {
 	// Step 1 — Buyer fetches the authorize nonce, signs EIP-3009, calls Authorize
 	// ----------------------------------------------------------------
 
-	// Fetch the nonce the EIP-3009 signature must use.
-	nonceResp, err := client.Payments.AuthorizeNonce(ctx, paymentID, payment.Payer)
+	// Compute the configHash, then fetch the nonce the EIP-3009 signature must use.
+	hashResp, err := client.Payments.Hash(ctx, payment)
+	if err != nil {
+		log.Fatalf("Hash: %v", err)
+	}
+	nonceResp, err := client.Payments.AuthorizeNonce(ctx, paymentID, hashResp.Hash)
 	if err != nil {
 		log.Fatalf("AuthorizeNonce: %v", err)
 	}

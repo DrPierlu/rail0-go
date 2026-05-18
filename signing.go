@@ -217,7 +217,8 @@ func SignTransferWithAuthorization(privateKey []byte, domain TokenDomain, params
 
 // SignAuthorize signs the EIP-3009 payload required by an Authorize call.
 //
-//	nonce, _ := client.Payments.AuthorizeNonce(ctx, paymentID, payment.Payer)
+//	hashResp, _ := client.Payments.Hash(ctx, payment)
+//	nonce, _    := client.Payments.AuthorizeNonce(ctx, paymentID, hashResp.Hash)
 //	sig, _ := rail0.SignAuthorize(rail0.SignPaymentParams{
 //	    PrivateKey: key, Payment: payment, Amount: big.NewInt(50_000_000),
 //	    Nonce: nonce.Nonce, ContractAddress: contractAddr, TokenDomain: domain,
@@ -233,7 +234,8 @@ func SignAuthorize(params SignPaymentParams) (Eip3009Signature, error) {
 
 // SignCharge signs the EIP-3009 payload required by a Charge call.
 //
-//	nonce, _ := client.Payments.ChargeNonce(ctx, paymentID, payment.Payer)
+//	hashResp, _ := client.Payments.Hash(ctx, payment)
+//	nonce, _    := client.Payments.ChargeNonce(ctx, paymentID, hashResp.Hash)
 //	sig, _ := rail0.SignCharge(rail0.SignPaymentParams{
 //	    PrivateKey: key, Payment: payment, Amount: big.NewInt(25_000_000),
 //	    Nonce: nonce.Nonce, ContractAddress: contractAddr, TokenDomain: domain,
