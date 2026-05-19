@@ -31,7 +31,7 @@ var testDomain = rail0.TokenDomain{
 	VerifyingContract: tokenAddress,
 }
 
-var testPayment = rail0.Payment{
+var testPayment = rail0.PaymentConfig{
 	Payer:               payerAddress,
 	Payee:               "0x2222222222222222222222222222222222222222",
 	Token:               tokenAddress,

@@ -74,7 +74,7 @@ type SignPaymentParams struct {
 	// PrivateKey is the 32-byte secp256k1 private key of the payer.
 	// Use HexToPrivateKey to convert from a 0x-prefixed hex string.
 	PrivateKey []byte
-	Payment    Payment
+	Payment    PaymentConfig
 	// Amount is the amount to pull from the payer, in token base units.
 	Amount *big.Int
 	// Nonce from client.Payments.AuthorizeNonce or client.Payments.ChargeNonce.

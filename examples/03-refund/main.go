@@ -1,15 +1,14 @@
 // Refund flow
 //
 // After a capture (or charge) the merchant can refund up to the full
-// captured amount back to the buyer, as long as refundExpiry has not
-// passed and the refundableAmount is sufficient.
-//
-// The refund is initiated by the payee (merchant). The API submits the
-// transaction on behalf of the payee.
+// captured amount back to the payer, as long as refundExpiry has not
+// passed. The payee must first approve the RAIL0 contract as a spender
+// on the token (so the contract can pull funds back from the payee).
 //
 // On-chain flow:
 //
-//	merchant → Refund()  funds move merchant → buyer
+//	payee signs approve tx → approve()  RAIL0 contract approved as spender
+//	payee signs refund tx  → Refund()   funds move payee → payer
 //
 // Run:
 //
@@ -21,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	rail0 "github.com/rail0/go-sdk"
 )
@@ -32,47 +30,61 @@ func main() {
 		BaseURL: "https://api.rail0.xyz",
 	})
 
-	now := time.Now().Unix()
-
-	payment := rail0.Payment{
-		Payer:               "0xBuyerAddress000000000000000000000000000000",
-		Payee:               "0xMerchantAddress0000000000000000000000000000",
-		Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-		MaxAmount:           "100000000",
-		AuthorizationExpiry: now - 30*60,       // already captured
-		RefundExpiry:        now + 60*60*24*6,  // still within refund window
-		FeeBps:              50,
-		FeeReceiver:         "0xFeeReceiverAddress000000000000000000000000",
-	}
-
+	// Assume the payment was previously created and captured.
 	const paymentID = "0xdeadbeef00000000000000000000000000000000000000000000000000000002"
 
 	// ----------------------------------------------------------------
-	// Check current refundable balance before acting
+	// Step 1 — Payee approves the RAIL0 contract as token spender
+	// (required before the contract can pull funds back from the payee)
 	// ----------------------------------------------------------------
 
-	state, err := client.Payments.Get(ctx, paymentID)
+	prepApprove, err := client.Payments.PrepareApprove(ctx, paymentID, rail0.ApproveRequest{
+		Amount: "115792089237316195423570985008687907853269984665640564039457584007913129639935", // unlimited
+	})
 	if err != nil {
-		log.Fatalf("Get: %v", err)
+		log.Fatalf("PrepareApprove: %v", err)
 	}
-	fmt.Printf("Refundable balance: %s\n", state.State.RefundableAmount) // e.g. "50000000"
+
+	// Payee signs prepApprove.UnsignedTransaction offline, then submits:
+	//   signedApproveTx := payeeWallet.SignTransaction(prepApprove.UnsignedTransaction)
+	signedApproveTx := "0x02f8..." // placeholder
+
+	approveResp, err := client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: signedApproveTx,
+	})
+	if err != nil {
+		log.Fatalf("SubmitApprove: %v", err)
+	}
+	fmt.Printf("Approved: tx=%s spender=%s\n", approveResp.TransactionHash, approveResp.Spender)
+	_ = prepApprove
 
 	// ----------------------------------------------------------------
-	// Refund — partial or full
+	// Step 2 — Payee prepares and submits a refund transaction
 	// ----------------------------------------------------------------
 
-	tx, err := client.Payments.Refund(ctx, paymentID, rail0.RefundParams{
-		Payment: payment,
-		Amount:  "50000000", // partial refund — 50 USDC out of 50 captured
+	prepRefund, err := client.Payments.PrepareRefund(ctx, paymentID, rail0.RefundPaymentRequest{
+		Amount: "50000000", // partial or full refund
+	})
+	if err != nil {
+		log.Fatalf("PrepareRefund: %v", err)
+	}
+
+	// Payee signs prepRefund.UnsignedTransaction offline, then submits:
+	//   signedRefundTx := payeeWallet.SignTransaction(prepRefund.UnsignedTransaction)
+	signedRefundTx := "0x02f8..." // placeholder
+
+	refundResp, err := client.Payments.SubmitRefund(ctx, paymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: signedRefundTx,
 	})
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
-			// Common: RefundExpired, InvalidRefundAmount, NotPayee
-			log.Fatalf("Refund failed [%s]: %s", apiErr.Code, apiErr.Message)
+			log.Fatalf("SubmitRefund failed [%s]: %s", apiErr.Code, apiErr.Message)
 		}
-		log.Fatalf("Refund: %v", err)
+		log.Fatalf("SubmitRefund: %v", err)
 	}
 
-	fmt.Printf("Refunded: %s\n", tx.TransactionHash)
+	fmt.Printf("Refunded: tx=%s refunded=%s remaining=%s\n",
+		refundResp.TransactionHash, refundResp.RefundedAmount, refundResp.RefundableAmount)
+	_ = prepRefund
 }

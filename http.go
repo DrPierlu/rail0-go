@@ -124,6 +124,10 @@ func (c *httpClient) post(ctx context.Context, path string, body any, out any) e
 	return c.do(ctx, http.MethodPost, path, body, out)
 }
 
+func (c *httpClient) put(ctx context.Context, path string, body any, out any) error {
+	return c.do(ctx, http.MethodPut, path, body, out)
+}
+
 func (c *httpClient) do(ctx context.Context, method, path string, body any, out any) error {
 	url := c.baseURL + path
 	maxAttempts := c.maxRetries + 1
@@ -190,11 +194,11 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			var errBody APIErrorBody
 			_ = json.Unmarshal(raw, &errBody)
-			if errBody.Error == "" {
-				errBody.Error = "UnknownError"
+			if errBody.Code == "" {
+				errBody.Code = "UnknownError"
 				errBody.Message = fmt.Sprintf("HTTP %d", resp.StatusCode)
 			}
-			apiErr := &APIError{Status: resp.StatusCode, Code: errBody.Error, Message: errBody.Message}
+			apiErr := &APIError{Status: resp.StatusCode, Code: errBody.Code, Message: errBody.Message}
 			if c.logger != nil {
 				c.logger(LogEntry{
 					Method:       method,
