@@ -2,8 +2,7 @@
 //
 // Tests in this file verify that every endpoint is correctly serialised/deserialised
 // over real HTTP using net/http/httptest — no mocked transport. The mock server
-// returns fixed, correctly-typed responses for each route, equivalent to the
-// TypeScript mock/ server used by integration.test.ts.
+// returns fixed, correctly-typed responses for each route.
 package rail0_test
 
 import (
@@ -26,45 +25,6 @@ var (
 	bytes32RE = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 )
 
-// fixtures returns static responses that mirror mock/fixtures.ts.
-var fixtures = struct {
-	payment  rail0.PaymentResponse
-	tx       rail0.TransactionResponse
-	nonce    rail0.NonceResponse
-	hash     rail0.HashResponse
-	token    rail0.TokenStatusResponse
-	domain   rail0.DomainSeparatorResponse
-	version  rail0.VersionResponse
-}{
-	payment: rail0.PaymentResponse{
-		PaymentID: "0x1111111111111111111111111111111111111111111111111111111111111111",
-		State: rail0.PaymentState{
-			Exists:           false,
-			CapturableAmount: "0",
-			RefundableAmount: "0",
-		},
-		ConfigHash: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-	},
-	tx: rail0.TransactionResponse{
-		TransactionHash: "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		Status:          "pending",
-	},
-	nonce: rail0.NonceResponse{
-		Nonce: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-	},
-	hash: rail0.HashResponse{
-		Hash: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-	},
-	token: rail0.TokenStatusResponse{
-		Address:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-		Accepted: true,
-	},
-	domain: rail0.DomainSeparatorResponse{
-		DomainSeparator: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-	},
-	version: rail0.VersionResponse{Version: 6},
-}
-
 // newTestServer creates an httptest.Server that serves all RAIL0 API routes
 // with fixture responses and returns a connected Client.
 func newTestServer(t *testing.T) *rail0.Client {
@@ -74,51 +34,152 @@ func newTestServer(t *testing.T) *rail0.Client {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(v)
 	}
-	tx := func(w http.ResponseWriter) {
-		w.WriteHeader(http.StatusAccepted)
-		respond(w, fixtures.tx)
+
+	createPaymentFixture := map[string]any{
+		"paymentId":  "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"configHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		"payment": map[string]any{
+			"payer": "0xBuyerAddress0000000000000000000000000000",
+			"payee": "0xMerchantAddress00000000000000000000000000",
+			"token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+			"maxAmount": "100000000", "authorizationExpiry": 9999999999, "refundExpiry": 9999999999,
+			"feeBps": 0, "feeReceiver": "0x0000000000000000000000000000000000000000",
+		},
+		"amount":  "50000000",
+		"chainId": 8453,
+		"rail0Contract": "0x4444444444444444444444444444444444444444",
+		"signingPayload": map[string]any{
+			"domain": map[string]any{"name": "USD Coin", "version": "2", "chainId": 8453, "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
+			"types": map[string]any{"TransferWithAuthorization": []any{}},
+			"primaryType": "TransferWithAuthorization",
+			"message": map[string]any{
+				"from": "0xBuyerAddress0000000000000000000000000000",
+				"to": "0x4444444444444444444444444444444444444444",
+				"value": "50000000", "validAfter": "0", "validBefore": "9999999999",
+				"nonce": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			},
+		},
+	}
+
+	sigFixture := map[string]any{
+		"paymentId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"status":    "signature_stored",
+	}
+
+	authorizeFixture := map[string]any{
+		"paymentId":           "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash":     "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"capturableAmount":    "50000000",
+		"authorizationExpiry": 9999999999,
+	}
+
+	chargeFixture := map[string]any{
+		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"chargedAmount":    "50000000",
+		"feeAmount":        "0",
+		"refundableAmount": "50000000",
+	}
+
+	prepareFixture := map[string]any{
+		"unsignedTransaction":  "0x02f8beef",
+		"to":                   "0x4444444444444444444444444444444444444444",
+		"data":                 "0x",
+		"chainId":              8453,
+		"nonce":                1,
+		"maxFeePerGas":         "1000000000",
+		"maxPriorityFeePerGas": "1000000000",
+		"gasLimit":             "100000",
+	}
+
+	captureSubmitFixture := map[string]any{
+		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"capturedAmount":   "50000000",
+		"capturableAmount": "0",
+		"refundableAmount": "50000000",
+	}
+
+	voidSubmitFixture := map[string]any{
+		"paymentId":       "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"releasedAmount":  "50000000",
+	}
+
+	releaseFixture := map[string]any{
+		"paymentId":       "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"releasedAmount":  "50000000",
+	}
+
+	approveSubmitFixture := map[string]any{
+		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"token":           "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+		"spender":         "0x4444444444444444444444444444444444444444",
+		"amount":          "1000000",
+	}
+
+	refundSubmitFixture := map[string]any{
+		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"refundedAmount":   "10000000",
+		"refundableAmount": "40000000",
 	}
 
 	mux := http.NewServeMux()
 
-	// GET /payments/{id}
-	mux.HandleFunc("GET /payments/", func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/payments/"), "/")
-		switch {
-		case len(parts) == 1: // /payments/{id}
-			respond(w, fixtures.payment)
-		case parts[1] == "authorize-nonce":
-			respond(w, fixtures.nonce)
-		case parts[1] == "charge-nonce":
-			respond(w, fixtures.nonce)
-		default:
+	// POST /payments
+	mux.HandleFunc("POST /payments", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		respond(w, createPaymentFixture)
+	})
+
+	// PUT /payments/{id}/sign
+	mux.HandleFunc("PUT /payments/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/payments/")
+		parts := strings.SplitN(path, "/", 2)
+		if len(parts) == 2 && parts[1] == "sign" {
+			respond(w, sigFixture)
+		} else {
 			http.NotFound(w, r)
 		}
 	})
 
-	// POST /payments/hash (must be before the generic /payments/ handler)
-	mux.HandleFunc("POST /payments/hash", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, fixtures.hash)
-	})
-
-	// POST /payments/{id}/{action}
+	// POST /payments/{id}/...
 	mux.HandleFunc("POST /payments/", func(w http.ResponseWriter, r *http.Request) {
-		tx(w)
-	})
-
-	// GET /tokens/{address}
-	mux.HandleFunc("GET /tokens/", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, fixtures.token)
-	})
-
-	// GET /domain-separator
-	mux.HandleFunc("GET /domain-separator", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, fixtures.domain)
-	})
-
-	// GET /version
-	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, fixtures.version)
+		path := strings.TrimPrefix(r.URL.Path, "/payments/")
+		parts := strings.SplitN(path, "/", 3)
+		if len(parts) < 2 {
+			http.NotFound(w, r)
+			return
+		}
+		action := strings.Join(parts[1:], "/")
+		switch action {
+		case "authorize":
+			respond(w, authorizeFixture)
+		case "charge":
+			respond(w, chargeFixture)
+		case "capture":
+			respond(w, prepareFixture)
+		case "capture/submit":
+			respond(w, captureSubmitFixture)
+		case "void":
+			respond(w, prepareFixture)
+		case "void/submit":
+			respond(w, voidSubmitFixture)
+		case "release":
+			respond(w, releaseFixture)
+		case "approve":
+			respond(w, prepareFixture)
+		case "approve/submit":
+			respond(w, approveSubmitFixture)
+		case "refund":
+			respond(w, prepareFixture)
+		case "refund/submit":
+			respond(w, refundSubmitFixture)
+		default:
+			http.NotFound(w, r)
+		}
 	})
 
 	srv := httptest.NewServer(mux)
@@ -132,7 +193,7 @@ func newTestServer(t *testing.T) *rail0.Client {
 
 const integrationPaymentID = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
-var integrationPayment = rail0.Payment{
+var integrationPayment = rail0.PaymentConfig{
 	Payer:               "0xBuyerAddress0000000000000000000000000000",
 	Payee:               "0xMerchantAddress00000000000000000000000000",
 	Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -153,85 +214,85 @@ var integrationSig = struct{ V int; R, S rail0.Bytes32 }{
 //  Payments
 // ================================================================
 
-func TestIntegration_PaymentsGet(t *testing.T) {
+func TestIntegration_CreatePayment(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Get(context.Background(), integrationPaymentID)
+	res, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: integrationPayment,
+		Amount:  "50000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes32RE.MatchString(res.PaymentID) {
+		t.Errorf("paymentId format invalid: %s", res.PaymentID)
 	}
 	if !bytes32RE.MatchString(res.ConfigHash) {
 		t.Errorf("configHash format invalid: %s", res.ConfigHash)
 	}
 }
 
-func TestIntegration_PaymentsAuthorize(t *testing.T) {
+func TestIntegration_Sign(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Authorize(context.Background(), integrationPaymentID, rail0.AuthorizeParams{
-		Payment: integrationPayment,
-		Amount:  "50000000",
-		V:       integrationSig.V,
-		R:       integrationSig.R,
-		S:       integrationSig.S,
+	res, err := client.Payments.Sign(context.Background(), integrationPaymentID, rail0.PayerSignatureRequest{
+		V: integrationSig.V,
+		R: integrationSig.R,
+		S: integrationSig.S,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status == "" {
+		t.Error("status should not be empty")
+	}
+}
+
+func TestIntegration_Authorize(t *testing.T) {
+	client := newTestServer(t)
+	res, err := client.Payments.Authorize(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes32RE.MatchString(res.TransactionHash) {
 		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
 	}
-	if res.Status != "pending" && res.Status != "confirmed" && res.Status != "failed" {
-		t.Errorf("unexpected status: %s", res.Status)
+	if res.CapturableAmount == "" {
+		t.Error("capturableAmount should not be empty")
 	}
 }
 
-func TestIntegration_PaymentsCharge(t *testing.T) {
+func TestIntegration_Charge(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Charge(context.Background(), integrationPaymentID, rail0.ChargeParams{
-		Payment: integrationPayment,
-		Amount:  "50000000",
-		V:       integrationSig.V,
-		R:       integrationSig.R,
-		S:       integrationSig.S,
-	})
+	res, err := client.Payments.Charge(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes32RE.MatchString(res.TransactionHash) {
 		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
 	}
+	if res.ChargedAmount == "" {
+		t.Error("chargedAmount should not be empty")
+	}
 }
 
-func TestIntegration_PaymentsCapture(t *testing.T) {
+func TestIntegration_PrepareCapture(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Capture(context.Background(), integrationPaymentID, rail0.CaptureParams{
-		Payment: integrationPayment,
-		Amount:  "50000000",
+	res, err := client.Payments.PrepareCapture(context.Background(), integrationPaymentID, rail0.CapturePaymentRequest{
+		Amount: "50000000",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
 }
 
-func TestIntegration_PaymentsVoid(t *testing.T) {
+func TestIntegration_SubmitCapture(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Void(context.Background(), integrationPaymentID, rail0.VoidParams{
-		Payment: integrationPayment,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
-	}
-}
-
-func TestIntegration_PaymentsRelease(t *testing.T) {
-	client := newTestServer(t)
-	res, err := client.Payments.Release(context.Background(), integrationPaymentID, rail0.ReleaseParams{
-		Payment: integrationPayment,
+	res, err := client.Payments.SubmitCapture(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -241,11 +302,21 @@ func TestIntegration_PaymentsRelease(t *testing.T) {
 	}
 }
 
-func TestIntegration_PaymentsRefund(t *testing.T) {
+func TestIntegration_PrepareVoid(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Refund(context.Background(), integrationPaymentID, rail0.RefundParams{
-		Payment: integrationPayment,
-		Amount:  "10000000",
+	res, err := client.Payments.PrepareVoid(context.Background(), integrationPaymentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
+	}
+}
+
+func TestIntegration_SubmitVoid(t *testing.T) {
+	client := newTestServer(t)
+	res, err := client.Payments.SubmitVoid(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -255,77 +326,68 @@ func TestIntegration_PaymentsRefund(t *testing.T) {
 	}
 }
 
-func TestIntegration_PaymentsAuthorizeNonce(t *testing.T) {
+func TestIntegration_Release(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.AuthorizeNonce(context.Background(), integrationPaymentID, integrationPayment.Payer)
+	res, err := client.Payments.Release(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.Nonce) {
-		t.Errorf("nonce format invalid: %s", res.Nonce)
+	if !bytes32RE.MatchString(res.TransactionHash) {
+		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
 	}
 }
 
-func TestIntegration_PaymentsChargeNonce(t *testing.T) {
+func TestIntegration_PrepareApprove(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.ChargeNonce(context.Background(), integrationPaymentID, integrationPayment.Payer)
+	res, err := client.Payments.PrepareApprove(context.Background(), integrationPaymentID, rail0.ApproveRequest{
+		Amount: "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.Nonce) {
-		t.Errorf("nonce format invalid: %s", res.Nonce)
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
 }
 
-func TestIntegration_PaymentsHash(t *testing.T) {
+func TestIntegration_SubmitApprove(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Hash(context.Background(), integrationPayment)
+	res, err := client.Payments.SubmitApprove(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.Hash) {
-		t.Errorf("hash format invalid: %s", res.Hash)
+	if !bytes32RE.MatchString(res.TransactionHash) {
+		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
 	}
 }
 
-// ================================================================
-//  Tokens
-// ================================================================
-
-func TestIntegration_TokensIsAccepted(t *testing.T) {
+func TestIntegration_PrepareRefund(t *testing.T) {
 	client := newTestServer(t)
-	token := "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-	res, err := client.Tokens.IsAccepted(context.Background(), token)
+	res, err := client.Payments.PrepareRefund(context.Background(), integrationPaymentID, rail0.RefundPaymentRequest{
+		Amount: "10000000",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The mock server always returns true for any token address.
-	_ = res.Accepted
-	_ = res.Address
-}
-
-// ================================================================
-//  Utils
-// ================================================================
-
-func TestIntegration_UtilsDomainSeparator(t *testing.T) {
-	client := newTestServer(t)
-	res, err := client.Utils.DomainSeparator(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes32RE.MatchString(res.DomainSeparator) {
-		t.Errorf("domainSeparator format invalid: %s", res.DomainSeparator)
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
 }
 
-func TestIntegration_UtilsVersion(t *testing.T) {
+func TestIntegration_SubmitRefund(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Utils.Version(context.Background())
+	res, err := client.Payments.SubmitRefund(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Version <= 0 {
-		t.Errorf("version must be positive, got %d", res.Version)
+	if !bytes32RE.MatchString(res.TransactionHash) {
+		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	}
+	if res.RefundedAmount == "" {
+		t.Error("refundedAmount should not be empty")
 	}
 }

@@ -85,7 +85,7 @@ func newMockClient(t *testing.T, mt *mockTransport, extra ...func(*rail0.ClientO
 
 const mockPaymentID = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
 
-var mockPayment = rail0.Payment{
+var mockPayment = rail0.PaymentConfig{
 	Payer:               "0x1111111111111111111111111111111111111111",
 	Payee:               "0x2222222222222222222222222222222222222222",
 	Token:               "0x3333333333333333333333333333333333333333",
@@ -96,37 +96,170 @@ var mockPayment = rail0.Payment{
 	FeeReceiver:         "0x0000000000000000000000000000000000000000",
 }
 
-var mockSig = struct{ V int; R, S rail0.Bytes32 }{
+var mockSig = struct {
+	V    int
+	R, S rail0.Bytes32
+}{
 	V: 27,
 	R: "0x1111111111111111111111111111111111111111111111111111111111111111",
 	S: "0x2222222222222222222222222222222222222222222222222222222222222222",
 }
 
-var mockTx = map[string]any{
-	"transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-	"status":          "pending",
-}
-
-var mockPaymentResp = map[string]any{
-	"paymentId": mockPaymentID,
-	"state": map[string]any{
-		"exists":           true,
-		"capturableAmount": "1000000",
-		"refundableAmount": "0",
-	},
+var mockCreatePaymentResp = map[string]any{
+	"paymentId":  mockPaymentID,
 	"configHash": "0xabababababababababababababababababababababababababababababababababab",
+	"payment": map[string]any{
+		"payer":               "0x1111111111111111111111111111111111111111",
+		"payee":               "0x2222222222222222222222222222222222222222",
+		"token":               "0x3333333333333333333333333333333333333333",
+		"maxAmount":           "1000000",
+		"authorizationExpiry": 9999999999,
+		"refundExpiry":        9999999999,
+		"feeBps":              0,
+		"feeReceiver":         "0x0000000000000000000000000000000000000000",
+	},
+	"amount":  "1000000",
+	"chainId": 8453,
+	"signingPayload": map[string]any{
+		"primaryType": "TransferWithAuthorization",
+		"domain":      map[string]any{},
+		"types":       map[string]any{},
+		"message":     map[string]any{},
+	},
+}
+
+var mockAuthorizeResp = map[string]any{
+	"paymentId":           mockPaymentID,
+	"transactionHash":     "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"capturableAmount":    "1000000",
+	"authorizationExpiry": 9999999999,
+}
+
+var mockChargeResp = map[string]any{
+	"paymentId":        mockPaymentID,
+	"transactionHash":  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"chargedAmount":    "1000000",
+	"feeAmount":        "0",
+	"refundableAmount": "1000000",
+}
+
+var mockPrepareResp = map[string]any{
+	"unsignedTransaction":  "0xdeadbeef",
+	"to":                   "0x4444444444444444444444444444444444444444",
+	"data":                 "0x",
+	"chainId":              8453,
+	"nonce":                1,
+	"maxFeePerGas":         "1000000000",
+	"maxPriorityFeePerGas": "1000000000",
+	"gasLimit":             "100000",
+}
+
+var mockSubmitCaptureResp = map[string]any{
+	"paymentId":        mockPaymentID,
+	"transactionHash":  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"capturedAmount":   "1000000",
+	"capturableAmount": "0",
+	"refundableAmount": "1000000",
+}
+
+var mockSubmitVoidResp = map[string]any{
+	"paymentId":       mockPaymentID,
+	"transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"releasedAmount":  "1000000",
+}
+
+var mockReleaseResp = map[string]any{
+	"paymentId":       mockPaymentID,
+	"transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"releasedAmount":  "1000000",
+}
+
+var mockSubmitApproveResp = map[string]any{
+	"transactionHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"token":           "0x3333333333333333333333333333333333333333",
+	"spender":         "0x4444444444444444444444444444444444444444",
+	"amount":          "1000000",
+}
+
+var mockSubmitRefundResp = map[string]any{
+	"paymentId":        mockPaymentID,
+	"transactionHash":  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	"refundedAmount":   "500000",
+	"refundableAmount": "500000",
+}
+
+var mockSignatureResp = map[string]any{
+	"paymentId": mockPaymentID,
+	"status":    "accepted",
 }
 
 // ================================================================
-//  Payments.Get
+//  Payments.CreatePayment
 // ================================================================
 
-func TestGet_ReturnsPaymentResponse(t *testing.T) {
+func TestCreatePayment_PostsToCorrectURL(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(200, mockPaymentResp))
+	mt.push(jsonResp(200, mockCreatePaymentResp))
 	client := newMockClient(t, mt)
 
-	res, err := client.Payments.Get(context.Background(), mockPaymentID)
+	_, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	if req.Method != http.MethodPost {
+		t.Errorf("method: got %s, want POST", req.Method)
+	}
+	if req.URL.Path != "/payments" {
+		t.Errorf("path: got %s, want /payments", req.URL.Path)
+	}
+}
+
+func TestCreatePayment_SendsJSONBody(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockCreatePaymentResp))
+	client := newMockClient(t, mt)
+
+	params := rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	}
+	if _, err := client.Payments.CreatePayment(context.Background(), params); err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := io.ReadAll(mt.recorded[0].Body)
+	var decoded rail0.CreatePaymentRequest
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if decoded.Amount != "1000000" {
+		t.Errorf("amount: got %s, want 1000000", decoded.Amount)
+	}
+	if decoded.Mode != "authorize" {
+		t.Errorf("mode: got %s, want authorize", decoded.Mode)
+	}
+}
+
+func TestCreatePayment_ReturnsCreatePaymentResponse(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockCreatePaymentResp))
+	client := newMockClient(t, mt)
+
+	res, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,49 +267,72 @@ func TestGet_ReturnsPaymentResponse(t *testing.T) {
 	if res.PaymentID != mockPaymentID {
 		t.Errorf("PaymentID: got %s, want %s", res.PaymentID, mockPaymentID)
 	}
-	if !res.State.Exists {
-		t.Error("State.Exists should be true")
-	}
-	if res.State.CapturableAmount != "1000000" {
-		t.Errorf("CapturableAmount: got %s, want 1000000", res.State.CapturableAmount)
-	}
-}
-
-func TestGet_404_ReturnsAPIError(t *testing.T) {
-	mt := &mockTransport{t: t}
-	mt.push(jsonResp(404, map[string]any{"error": "PaymentNotFound", "message": "No payment found."}))
-	client := newMockClient(t, mt)
-
-	_, err := client.Payments.Get(context.Background(), mockPaymentID)
-
-	var apiErr *rail0.APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("expected *APIError, got %T: %v", err, err)
-	}
-	if apiErr.Status != 404 {
-		t.Errorf("Status: got %d, want 404", apiErr.Status)
-	}
-	if apiErr.Code != "PaymentNotFound" {
-		t.Errorf("Code: got %s, want PaymentNotFound", apiErr.Code)
+	if res.ConfigHash == "" {
+		t.Error("ConfigHash should not be empty")
 	}
 }
 
 // ================================================================
-//  Payments.Authorize — URL + body routing
+//  Payments.Sign
+// ================================================================
+
+func TestSign_PutsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSignatureResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.Sign(context.Background(), mockPaymentID, rail0.PayerSignatureRequest{
+		V: mockSig.V,
+		R: mockSig.R,
+		S: mockSig.S,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	if req.Method != http.MethodPut {
+		t.Errorf("method: got %s, want PUT", req.Method)
+	}
+	wantPath := "/payments/" + mockPaymentID + "/sign"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+func TestSign_SendsVRS(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSignatureResp))
+	client := newMockClient(t, mt)
+
+	if _, err := client.Payments.Sign(context.Background(), mockPaymentID, rail0.PayerSignatureRequest{
+		V: mockSig.V,
+		R: mockSig.R,
+		S: mockSig.S,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := io.ReadAll(mt.recorded[0].Body)
+	var decoded rail0.PayerSignatureRequest
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if decoded.V != 27 {
+		t.Errorf("v: got %d, want 27", decoded.V)
+	}
+}
+
+// ================================================================
+//  Payments.Authorize — URL routing (no body)
 // ================================================================
 
 func TestAuthorize_PostsToCorrectURL(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(202, mockTx))
+	mt.push(jsonResp(202, mockAuthorizeResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.Authorize(context.Background(), mockPaymentID, rail0.AuthorizeParams{
-		Payment: mockPayment,
-		Amount:  "1000000",
-		V:       mockSig.V,
-		R:       mockSig.R,
-		S:       mockSig.S,
-	})
+	_, err := client.Payments.Authorize(context.Background(), mockPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,32 +347,280 @@ func TestAuthorize_PostsToCorrectURL(t *testing.T) {
 	}
 }
 
-func TestAuthorize_SendsJSONBody(t *testing.T) {
+func TestAuthorize_ReturnsAuthorizePaymentResponse(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(202, mockTx))
+	mt.push(jsonResp(202, mockAuthorizeResp))
 	client := newMockClient(t, mt)
 
-	params := rail0.AuthorizeParams{
-		Payment: mockPayment,
-		Amount:  "1000000",
-		V:       mockSig.V,
-		R:       mockSig.R,
-		S:       mockSig.S,
+	res, err := client.Payments.Authorize(context.Background(), mockPaymentID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := client.Payments.Authorize(context.Background(), mockPaymentID, params); err != nil {
+	if res.TransactionHash == "" {
+		t.Error("TransactionHash should not be empty")
+	}
+	if res.CapturableAmount != "1000000" {
+		t.Errorf("CapturableAmount: got %s, want 1000000", res.CapturableAmount)
+	}
+}
+
+// ================================================================
+//  Payments.Charge — URL routing (no body)
+// ================================================================
+
+func TestCharge_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(202, mockChargeResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.Charge(context.Background(), mockPaymentID)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	body, _ := io.ReadAll(mt.recorded[0].Body)
-	var decoded rail0.AuthorizeParams
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		t.Fatalf("body is not valid JSON: %v", err)
+	req := mt.recorded[0]
+	if req.Method != http.MethodPost {
+		t.Errorf("method: got %s, want POST", req.Method)
 	}
-	if decoded.V != 27 {
-		t.Errorf("v: got %d, want 27", decoded.V)
+	wantPath := "/payments/" + mockPaymentID + "/charge"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
-	if decoded.Amount != "1000000" {
-		t.Errorf("amount: got %s, want 1000000", decoded.Amount)
+}
+
+// ================================================================
+//  Payments.PrepareCapture
+// ================================================================
+
+func TestPrepareCapture_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockPrepareResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.PrepareCapture(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{
+		Amount: "1000000",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	if req.Method != http.MethodPost {
+		t.Errorf("method: got %s, want POST", req.Method)
+	}
+	wantPath := "/payments/" + mockPaymentID + "/capture"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+func TestPrepareCapture_ReturnsPrepareTransactionResponse(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockPrepareResp))
+	client := newMockClient(t, mt)
+
+	res, err := client.Payments.PrepareCapture(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{Amount: "1000000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.UnsignedTransaction == "" {
+		t.Error("UnsignedTransaction should not be empty")
+	}
+}
+
+// ================================================================
+//  Payments.SubmitCapture
+// ================================================================
+
+func TestSubmitCapture_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSubmitCaptureResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.SubmitCapture(context.Background(), mockPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0xdeadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/capture/submit"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+// ================================================================
+//  Payments.PrepareVoid / SubmitVoid
+// ================================================================
+
+func TestPrepareVoid_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockPrepareResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.PrepareVoid(context.Background(), mockPaymentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/void"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+func TestSubmitVoid_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSubmitVoidResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.SubmitVoid(context.Background(), mockPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0xdeadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/void/submit"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+// ================================================================
+//  Payments.Release (no body)
+// ================================================================
+
+func TestRelease_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockReleaseResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.Release(context.Background(), mockPaymentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	if req.Method != http.MethodPost {
+		t.Errorf("method: got %s, want POST", req.Method)
+	}
+	wantPath := "/payments/" + mockPaymentID + "/release"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+// ================================================================
+//  Payments.PrepareApprove / SubmitApprove
+// ================================================================
+
+func TestPrepareApprove_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockPrepareResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.PrepareApprove(context.Background(), mockPaymentID, rail0.ApproveRequest{
+		Amount: "1000000",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/approve"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+func TestSubmitApprove_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSubmitApproveResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.SubmitApprove(context.Background(), mockPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0xdeadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/approve/submit"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+// ================================================================
+//  Payments.PrepareRefund / SubmitRefund
+// ================================================================
+
+func TestPrepareRefund_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockPrepareResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.PrepareRefund(context.Background(), mockPaymentID, rail0.RefundPaymentRequest{
+		Amount: "500000",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/refund"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+func TestSubmitRefund_PostsToCorrectURL(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(200, mockSubmitRefundResp))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.SubmitRefund(context.Background(), mockPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0xdeadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := mt.recorded[0]
+	wantPath := "/payments/" + mockPaymentID + "/refund/submit"
+	if req.URL.Path != wantPath {
+		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
+	}
+}
+
+// ================================================================
+//  404 error decoding
+// ================================================================
+
+func TestCreatePayment_404_ReturnsAPIError(t *testing.T) {
+	mt := &mockTransport{t: t}
+	mt.push(jsonResp(404, map[string]any{"code": "PaymentNotFound", "message": "No payment found."}))
+	client := newMockClient(t, mt)
+
+	_, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
+
+	var apiErr *rail0.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T: %v", err, err)
+	}
+	if apiErr.Status != 404 {
+		t.Errorf("Status: got %d, want 404", apiErr.Status)
 	}
 }
 
@@ -228,14 +632,19 @@ func TestRetry_SucceedsOnThirdAttempt(t *testing.T) {
 	mt := &mockTransport{t: t}
 	mt.fail(errors.New("network failure"))
 	mt.fail(errors.New("network failure"))
-	mt.push(jsonResp(200, mockPaymentResp))
+	mt.push(jsonResp(200, mockCreatePaymentResp))
 
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
 		o.MaxRetries = 2
 		o.RetryDelay = time.Nanosecond
 	})
 
-	res, err := client.Payments.Get(context.Background(), mockPaymentID)
+	res, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
 	if err != nil {
 		t.Fatalf("expected success after 2 retries, got: %v", err)
 	}
@@ -259,7 +668,12 @@ func TestRetry_ThrowsAfterExhausted(t *testing.T) {
 		o.RetryDelay = time.Nanosecond
 	})
 
-	_, err := client.Payments.Get(context.Background(), mockPaymentID)
+	_, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
 	if !errors.Is(err, networkErr) {
 		t.Errorf("expected networkErr, got %v", err)
 	}
@@ -270,14 +684,19 @@ func TestRetry_ThrowsAfterExhausted(t *testing.T) {
 
 func TestRetry_DoesNotRetryHTTPErrors(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(404, map[string]any{"error": "PaymentNotFound", "message": "Not found."}))
+	mt.push(jsonResp(404, map[string]any{"code": "PaymentNotFound", "message": "Not found."}))
 
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
 		o.MaxRetries = 2
 		o.RetryDelay = time.Nanosecond
 	})
 
-	_, err := client.Payments.Get(context.Background(), mockPaymentID)
+	_, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	})
 	var apiErr *rail0.APIError
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("expected *APIError, got %T", err)
@@ -293,14 +712,19 @@ func TestRetry_DoesNotRetryHTTPErrors(t *testing.T) {
 
 func TestLogger_SuccessEntry(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(200, mockPaymentResp))
+	mt.push(jsonResp(200, mockCreatePaymentResp))
 
 	var entries []rail0.LogEntry
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
 		o.Logger = func(e rail0.LogEntry) { entries = append(entries, e) }
 	})
 
-	if _, err := client.Payments.Get(context.Background(), mockPaymentID); err != nil {
+	if _, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,11 +732,11 @@ func TestLogger_SuccessEntry(t *testing.T) {
 		t.Fatalf("expected 1 log entry, got %d", len(entries))
 	}
 	e := entries[0]
-	if e.Method != "GET" {
+	if e.Method != "POST" {
 		t.Errorf("Method: got %s", e.Method)
 	}
-	if !strings.Contains(e.URL, "/payments/"+mockPaymentID) {
-		t.Errorf("URL missing payment path: %s", e.URL)
+	if !strings.Contains(e.URL, "/payments") {
+		t.Errorf("URL missing payments path: %s", e.URL)
 	}
 	if e.Status != 200 {
 		t.Errorf("Status: got %d", e.Status)
@@ -323,22 +747,22 @@ func TestLogger_SuccessEntry(t *testing.T) {
 	if e.Err != nil {
 		t.Errorf("Err should be nil, got %v", e.Err)
 	}
-	if e.RequestBody != nil {
-		t.Error("RequestBody should be nil for GET")
-	}
 }
 
 func TestLogger_IncludesRequestBodyOnPOST(t *testing.T) {
 	mt := &mockTransport{t: t}
-	mt.push(jsonResp(202, mockTx))
+	mt.push(jsonResp(202, mockAuthorizeResp))
 
 	var entries []rail0.LogEntry
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
 		o.Logger = func(e rail0.LogEntry) { entries = append(entries, e) }
 	})
 
-	params := rail0.AuthorizeParams{Payment: mockPayment, Amount: "1000000", V: 27, R: mockSig.R, S: mockSig.S}
-	if _, err := client.Payments.Authorize(context.Background(), mockPaymentID, params); err != nil {
+	if _, err := client.Payments.Sign(context.Background(), mockPaymentID, rail0.PayerSignatureRequest{
+		V: mockSig.V,
+		R: mockSig.R,
+		S: mockSig.S,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -346,14 +770,14 @@ func TestLogger_IncludesRequestBodyOnPOST(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 	e := entries[0]
-	if e.Method != "POST" {
+	if e.Method != "PUT" {
 		t.Errorf("Method: got %s", e.Method)
 	}
 	if e.Status != 202 {
 		t.Errorf("Status: got %d", e.Status)
 	}
 	if e.RequestBody == nil {
-		t.Error("RequestBody should be non-nil for POST")
+		t.Error("RequestBody should be non-nil for PUT with body")
 	}
 	if e.Err != nil {
 		t.Errorf("Err should be nil, got %v", e.Err)
@@ -362,7 +786,7 @@ func TestLogger_IncludesRequestBodyOnPOST(t *testing.T) {
 
 func TestLogger_HTTPError(t *testing.T) {
 	mt := &mockTransport{t: t}
-	errBody := map[string]any{"error": "PaymentNotFound", "message": "No payment found."}
+	errBody := map[string]any{"code": "PaymentNotFound", "message": "No payment found."}
 	mt.push(jsonResp(404, errBody))
 
 	var entries []rail0.LogEntry
@@ -370,7 +794,7 @@ func TestLogger_HTTPError(t *testing.T) {
 		o.Logger = func(e rail0.LogEntry) { entries = append(entries, e) }
 	})
 
-	_, _ = client.Payments.Get(context.Background(), mockPaymentID)
+	_, _ = client.Payments.Authorize(context.Background(), mockPaymentID)
 
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
@@ -395,7 +819,7 @@ func TestLogger_NetworkError(t *testing.T) {
 		o.Logger = func(e rail0.LogEntry) { entries = append(entries, e) }
 	})
 
-	_, _ = client.Payments.Get(context.Background(), mockPaymentID)
+	_, _ = client.Payments.Authorize(context.Background(), mockPaymentID)
 
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
@@ -416,7 +840,7 @@ func TestLogger_AttemptAndWillRetryFields(t *testing.T) {
 	networkErr := errors.New("network failure")
 	mt := &mockTransport{t: t}
 	mt.fail(networkErr)
-	mt.push(jsonResp(200, mockPaymentResp))
+	mt.push(jsonResp(200, mockCreatePaymentResp))
 
 	var entries []rail0.LogEntry
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
@@ -425,7 +849,12 @@ func TestLogger_AttemptAndWillRetryFields(t *testing.T) {
 		o.Logger = func(e rail0.LogEntry) { entries = append(entries, e) }
 	})
 
-	if _, err := client.Payments.Get(context.Background(), mockPaymentID); err != nil {
+	if _, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -496,7 +925,7 @@ func TestRetry_SmallDelayIsRespected(t *testing.T) {
 	mt := &mockTransport{t: t}
 	mt.fail(networkErr)
 	mt.fail(networkErr)
-	mt.push(jsonResp(200, mockPaymentResp))
+	mt.push(jsonResp(200, mockCreatePaymentResp))
 
 	client := newMockClient(t, mt, func(o *rail0.ClientOptions) {
 		o.MaxRetries = 2
@@ -504,7 +933,12 @@ func TestRetry_SmallDelayIsRespected(t *testing.T) {
 	})
 
 	start := time.Now()
-	if _, err := client.Payments.Get(context.Background(), mockPaymentID); err != nil {
+	if _, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
+		Payment: mockPayment,
+		Amount:  "1000000",
+		ChainID: 8453,
+		Mode:    "authorize",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
