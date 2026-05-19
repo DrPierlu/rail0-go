@@ -77,10 +77,11 @@ func (s *PaymentsService) Refund(ctx context.Context, paymentID Bytes32, params 
 }
 
 // AuthorizeNonce returns the EIP-3009 nonce the payer must include when signing an Authorize call.
+// configHash is the EIP-712 digest of the Payment configuration (from Payments.Hash).
 // Pass the returned Nonce into SignAuthorize.
-func (s *PaymentsService) AuthorizeNonce(ctx context.Context, paymentID Bytes32, payer Address) (*NonceResponse, error) {
+func (s *PaymentsService) AuthorizeNonce(ctx context.Context, paymentID Bytes32, configHash Bytes32) (*NonceResponse, error) {
 	var out NonceResponse
-	path := fmt.Sprintf("/payments/%s/authorize-nonce?payer=%s", paymentID, payer)
+	path := fmt.Sprintf("/payments/%s/authorize-nonce?configHash=%s", paymentID, configHash)
 	if err := s.http.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
@@ -88,10 +89,11 @@ func (s *PaymentsService) AuthorizeNonce(ctx context.Context, paymentID Bytes32,
 }
 
 // ChargeNonce returns the EIP-3009 nonce the payer must include when signing a Charge call.
+// configHash is the EIP-712 digest of the Payment configuration (from Payments.Hash).
 // Pass the returned Nonce into SignCharge.
-func (s *PaymentsService) ChargeNonce(ctx context.Context, paymentID Bytes32, payer Address) (*NonceResponse, error) {
+func (s *PaymentsService) ChargeNonce(ctx context.Context, paymentID Bytes32, configHash Bytes32) (*NonceResponse, error) {
 	var out NonceResponse
-	path := fmt.Sprintf("/payments/%s/charge-nonce?payer=%s", paymentID, payer)
+	path := fmt.Sprintf("/payments/%s/charge-nonce?configHash=%s", paymentID, configHash)
 	if err := s.http.get(ctx, path, &out); err != nil {
 		return nil, err
 	}

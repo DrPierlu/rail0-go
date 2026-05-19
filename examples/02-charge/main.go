@@ -45,8 +45,12 @@ func main() {
 
 	const paymentID = "0xdeadbeef00000000000000000000000000000000000000000000000000000001"
 
-	// Fetch the charge nonce (different from the authorize nonce).
-	nonceResp, err := client.Payments.ChargeNonce(ctx, paymentID, payment.Payer)
+	// Compute the configHash, then fetch the charge nonce (different from the authorize nonce).
+	hashResp, err := client.Payments.Hash(ctx, payment)
+	if err != nil {
+		log.Fatalf("Hash: %v", err)
+	}
+	nonceResp, err := client.Payments.ChargeNonce(ctx, paymentID, hashResp.Hash)
 	if err != nil {
 		log.Fatalf("ChargeNonce: %v", err)
 	}
