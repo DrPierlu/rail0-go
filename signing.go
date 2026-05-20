@@ -67,7 +67,7 @@ type SignTransferParams struct {
 }
 
 // SignPaymentParams holds parameters for SignAuthorize and SignCharge.
-// Obtain the Nonce from client.Payments.AuthorizeNonce or ChargeNonce.
+// Obtain the Nonce from the CreatePayment response: resp.SigningPayload.Message.Nonce.
 // The contract hardcodes validAfter=0 and validBefore=Payment.AuthorizationExpiry;
 // these are not configurable by the caller.
 type SignPaymentParams struct {
@@ -77,7 +77,7 @@ type SignPaymentParams struct {
 	Payment    PaymentConfig
 	// Amount is the amount to pull from the payer, in token base units.
 	Amount *big.Int
-	// Nonce from client.Payments.AuthorizeNonce or client.Payments.ChargeNonce.
+	// Nonce from CreatePayment response: resp.SigningPayload.Message.Nonce.
 	Nonce           Bytes32
 	ContractAddress Address
 	TokenDomain     TokenDomain
