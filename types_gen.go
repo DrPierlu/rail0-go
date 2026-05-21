@@ -178,8 +178,10 @@ type PaymentConfig struct {
 	Token Address `json:"token"`
 }
 
-// PaymentInput Buyer-supplied payment parameters. Policy fields (amount, authorizationExpiry, refundExpiry, feeBps, feeReceiver) are fixed API configuration and are applied server-side — they are not accepted in input but appear in CreatePaymentResponse.payment.
+// PaymentInput Buyer-supplied payment parameters sent when creating a payment.
 type PaymentInput struct {
+	// Amount to pay (in token base units, e.g. "100000000" for 100 USDC with 6 decimals).
+	Amount Uint256String `json:"amount"`
 	// Merchant wallet address (walletAddress from GET /merchants/{id}/payment-methods).
 	Payee Address `json:"payee"`
 	// Buyer address. Funds are pulled from this address.

@@ -49,7 +49,7 @@ func main() {
 	//   signedApproveTx := payeeWallet.SignTransaction(prepApprove.UnsignedTransaction)
 	signedApproveTx := "0x02f8..." // placeholder
 
-	approveResp, err := client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitTransactionRequest{
+	approveResp, err := client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitApproveRequest{
 		SignedTransaction: signedApproveTx,
 	})
 	if err != nil {

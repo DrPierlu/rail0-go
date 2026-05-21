@@ -7,7 +7,7 @@
 //
 // On-chain flow:
 //
-//	payer signs EIP-712 → Charge()  funds move payer → payee (minus fee), atomically
+//	payer signs EIP-712 → Charge+SubmitCharge  funds move payer → payee (minus fee), atomically
 //
 // Run:
 //
@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	rail0 "github.com/rail0/go-sdk"
 )
@@ -30,67 +29,57 @@ func main() {
 		BaseURL: "https://api.rail0.xyz",
 	})
 
-	now := time.Now().Unix()
-
-	payment := rail0.PaymentConfig{
-		Payer:               "0xBuyerAddress000000000000000000000000000000",
-		Payee:               "0xMerchantAddress0000000000000000000000000000",
-		Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-		MaxAmount:           "25000000",                                    // 25 USDC
-		AuthorizationExpiry: now + 60*5,                                   // short window — charge captures immediately
-		RefundExpiry:        now + 60*60*24*30,                            // 30-day refund window
-		FeeBps:              0,
-		FeeReceiver:         "0x0000000000000000000000000000000000000000",
-	}
-
 	// ----------------------------------------------------------------
 	// Step 1 — Payer creates a payment intent (mode = "charge")
 	// ----------------------------------------------------------------
 
 	createResp, err := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
-		Payment: payment,
-		Amount:  "25000000",
-		ChainID: 8453,
+		Payment: rail0.PaymentInput{
+			Payer:  "0xBuyerAddress000000000000000000000000000000",
+			Payee:  "0xMerchantAddress0000000000000000000000000000",
+			Token:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
+			Amount: "25000000",                                    // 25 USDC (6 decimals)
+		},
+		ChainId: 8453, // Base
 		Mode:    "charge",
 	})
 	if err != nil {
 		log.Fatalf("CreatePayment: %v", err)
 	}
 
-	fmt.Printf("Payment ID: %s\n", createResp.PaymentID)
+	fmt.Printf("Payment ID: %s\n", createResp.PaymentId)
 
 	// The payer signs the signingPayload using eth_signTypedData_v4 or SignCharge:
 	//
 	//   key, _ := rail0.HexToPrivateKey("0xYourPrivateKey")
-	//   sig := rail0.SignCharge(rail0.SignPaymentParams{
+	//   sig, _ := rail0.SignCharge(rail0.SignPaymentParams{
 	//       PrivateKey:      key,
-	//       Payment:         payment,
+	//       Payment:         createResp.Payment,
 	//       Amount:          big.NewInt(25_000_000),
 	//       Nonce:           createResp.SigningPayload.Message.Nonce,
 	//       ContractAddress: createResp.Rail0Contract,
 	//       TokenDomain: rail0.TokenDomain{
 	//           Name:              createResp.SigningPayload.Domain.Name,
 	//           Version:           createResp.SigningPayload.Domain.Version,
-	//           ChainID:           int(createResp.SigningPayload.Domain.ChainID),
+	//           ChainID:           uint64(createResp.SigningPayload.Domain.ChainId),
 	//           VerifyingContract: createResp.SigningPayload.Domain.VerifyingContract,
 	//       },
 	//   })
+	//   signature := "0x" + sig.R[2:] + sig.S[2:] + fmt.Sprintf("%02x", sig.V)
 
-	// Step 2 — Payer submits the signature
-	_, err = client.Payments.Sign(ctx, createResp.PaymentID, rail0.PayerSignatureRequest{
-		V: 27, // from signature
-		R: "0x1111111111111111111111111111111111111111111111111111111111111111",
-		S: "0x2222222222222222222222222222222222222222222222222222222222222222",
+	// Step 2 — Payer submits the 65-byte combined signature
+	_, err = client.Payments.Sign(ctx, createResp.PaymentId, rail0.PayerSignatureRequest{
+		Signature: "0x1a2b3c...(130 hex chars from eth_signTypedData_v4)",
 	})
 	if err != nil {
 		log.Fatalf("Sign: %v", err)
 	}
 
 	// ----------------------------------------------------------------
-	// Step 3 — Payee triggers the one-shot charge
+	// Step 3 — Payee builds the charge transaction
 	// ----------------------------------------------------------------
 
-	tx, err := client.Payments.Charge(ctx, createResp.PaymentID)
+	prepCharge, err := client.Payments.Charge(ctx, createResp.PaymentId)
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
@@ -98,7 +87,22 @@ func main() {
 		}
 		log.Fatalf("Charge: %v", err)
 	}
+	fmt.Printf("Unsigned charge tx: %s\n", prepCharge.UnsignedTransaction)
+
+	// The payee signs prepCharge.UnsignedTransaction offline, then submits:
+	//   signedChargeTx := payeeWallet.SignTransaction(prepCharge.UnsignedTransaction)
+	signedChargeTx := "0x02f8..." // placeholder
+
+	chargeResp, err := client.Payments.SubmitCharge(ctx, createResp.PaymentId,
+		rail0.SubmitTransactionRequest{SignedTransaction: signedChargeTx})
+	if err != nil {
+		var apiErr *rail0.APIError
+		if errors.As(err, &apiErr) {
+			log.Fatalf("SubmitCharge failed [%s]: %s", apiErr.Code, apiErr.Message)
+		}
+		log.Fatalf("SubmitCharge: %v", err)
+	}
 
 	fmt.Printf("Charged: tx=%s charged=%s fee=%s\n",
-		tx.TransactionHash, tx.ChargedAmount, tx.FeeAmount)
+		chargeResp.TransactionHash, chargeResp.ChargedAmount, chargeResp.FeeAmount)
 }

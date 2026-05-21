@@ -27,7 +27,8 @@ func (s *PaymentsService) CreatePayment(ctx context.Context, params CreatePaymen
 	return &out, nil
 }
 
-// Sign deposits the payer's EIP-712 signature (v, r, s).
+// Sign deposits the payer's EIP-712 signature. params.Signature must be the
+// 65-byte secp256k1 signature as a 0x-prefixed 130-char hex string (r+s+v).
 func (s *PaymentsService) Sign(ctx context.Context, paymentID Bytes32, params PayerSignatureRequest) (*PayerSignatureResponse, error) {
 	var out PayerSignatureResponse
 	if err := s.http.put(ctx, "/payments/"+paymentID+"/sign", params, &out); err != nil {
@@ -54,10 +55,22 @@ func (s *PaymentsService) SubmitAuthorize(ctx context.Context, paymentID Bytes32
 	return &out, nil
 }
 
-// Charge relays the stored EIP-3009 signature to the RAIL0 charge() function (one-shot). Called by the payee.
-func (s *PaymentsService) Charge(ctx context.Context, paymentID Bytes32) (*ChargePaymentResponse, error) {
-	var out ChargePaymentResponse
+// Charge builds the unsigned charge() transaction. The payer signature must have been
+// submitted first via Sign. Charge is a one-shot alternative to Authorize+Capture:
+// funds are transferred directly to the payee without an escrow window.
+// Sign the returned UnsignedTransaction and submit it with SubmitCharge.
+func (s *PaymentsService) Charge(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
+	var out PrepareTransactionResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SubmitCharge broadcasts a signed charge transaction. Called by the payee.
+func (s *PaymentsService) SubmitCharge(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*ChargePaymentResponse, error) {
+	var out ChargePaymentResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
