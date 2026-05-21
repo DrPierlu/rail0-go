@@ -40,7 +40,7 @@ func main() {
         Payer:               "0xBuyer...",
         Payee:               "0xMerchant...",
         Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-        MaxAmount:           "100000000",                                    // 100 USDC (6 decimals)
+        Amount:              "100000000",                                    // 100 USDC (6 decimals)
         AuthorizationExpiry: now + 3600*24,                                 // 24 h to capture
         RefundExpiry:        now + 3600*24*7,                               // 7-day refund window
         FeeBps:              0,
@@ -330,7 +330,7 @@ Common error codes:
 | `AuthorizationExpired` | `AuthorizationExpiry` is in the past (Capture) |
 | `AuthorizationNotExpired` | `AuthorizationExpiry` has not passed yet (Release) |
 | `RefundExpired` | `RefundExpiry` is in the past |
-| `InvalidAmount` | `amount` is 0 or exceeds `maxAmount` |
+| `InvalidAmount` | `amount` is 0 |
 | `TokenNotAccepted` | token is not in this deployment's allowlist |
 | `NotPayee` | caller is not `payment.Payee` |
 
@@ -347,8 +347,8 @@ go test ./...
 ### Regenerate types after an API change
 
 ```bash
-# 1. Drop the updated spec into gen/
-cp path/to/new-openapi.json gen/openapi.json
+# 1. Update the schema in rail0-api (sibling repo),
+#    or set RAIL0_SCHEMA_PATH to point to a local file.
 
 # 2. Regenerate types_gen.go
 go run gen/generate.go
@@ -363,9 +363,8 @@ go test ./...
 ## Project structure
 
 ```text
-gen/              OpenAPI spec + generation pipeline
-  openapi.json    source of truth for the API surface
-  generate.go     generates types_gen.go from the spec
+gen/              Generation pipeline (schema from rail0-api)
+  generate.go     generates types_gen.go from the schema
 
 test/             test suite
   signing_test.go signing utility tests (EIP-712 cross-check)

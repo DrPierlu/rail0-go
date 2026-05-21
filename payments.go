@@ -9,6 +9,15 @@ type PaymentsService struct {
 	http *httpClient
 }
 
+// Get fetches the current payment state (DB status + live on-chain amounts).
+func (s *PaymentsService) Get(ctx context.Context, paymentID Bytes32) (*PaymentResponse, error) {
+	var out PaymentResponse
+	if err := s.http.get(ctx, "/payments/"+paymentID, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // CreatePayment creates a payment intent and returns the EIP-712 signingPayload for the payer to sign.
 func (s *PaymentsService) CreatePayment(ctx context.Context, params CreatePaymentRequest) (*CreatePaymentResponse, error) {
 	var out CreatePaymentResponse
@@ -28,9 +37,18 @@ func (s *PaymentsService) Sign(ctx context.Context, paymentID Bytes32, params Pa
 }
 
 // Authorize relays the stored EIP-3009 signature to the RAIL0 authorize() function. Called by the payee.
-func (s *PaymentsService) Authorize(ctx context.Context, paymentID Bytes32) (*AuthorizePaymentResponse, error) {
-	var out AuthorizePaymentResponse
+func (s *PaymentsService) Authorize(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
+	var out PrepareTransactionResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SubmitAuthorize broadcasts a signed authorize transaction. Called by the payee.
+func (s *PaymentsService) SubmitAuthorize(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*AuthorizePaymentResponse, error) {
+	var out AuthorizePaymentResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -81,10 +99,21 @@ func (s *PaymentsService) SubmitVoid(ctx context.Context, paymentID Bytes32, par
 	return &out, nil
 }
 
-// Release releases escrowed funds back to the payer after AuthorizationExpiry. Permissionless.
-func (s *PaymentsService) Release(ctx context.Context, paymentID Bytes32) (*ReleasePaymentResponse, error) {
+// PrepareRelease builds the unsigned release() transaction. Pass CallerAddress to build the tx
+// for the buyer; omit (or pass empty) to build it for the payee.
+// Release can only be called after AuthorizationExpiry has passed on-chain.
+func (s *PaymentsService) PrepareRelease(ctx context.Context, paymentID Bytes32, params ReleaseRequest) (*PrepareTransactionResponse, error) {
+	var out PrepareTransactionResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/release", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SubmitRelease broadcasts a signed release transaction.
+func (s *PaymentsService) SubmitRelease(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*ReleasePaymentResponse, error) {
 	var out ReleasePaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/release", nil, &out); err != nil {
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/release/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -100,7 +129,8 @@ func (s *PaymentsService) PrepareApprove(ctx context.Context, paymentID Bytes32,
 }
 
 // SubmitApprove broadcasts a signed ERC-20 approve transaction. Called by the payee.
-func (s *PaymentsService) SubmitApprove(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*ApproveResponse, error) {
+// Set Amount in params so the API records the approved amount in the transaction log.
+func (s *PaymentsService) SubmitApprove(ctx context.Context, paymentID Bytes32, params SubmitApproveRequest) (*ApproveResponse, error) {
 	var out ApproveResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/approve/submit", params, &out); err != nil {
 		return nil, err
