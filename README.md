@@ -1,6 +1,6 @@
 # rail0-go
 
-Go SDK for the [RAIL0](https://github.com/rail0/rail0) stablecoin payment API.
+Go SDK for the [RAIL0](https://github.com/commercelayer/rail0) stablecoin payment API.
 
 RAIL0 is an immutable smart contract that brings the authorize → capture → refund lifecycle of card networks to stablecoin payments — no intermediaries, no protocol fees, no permission required. This SDK wraps the REST API that sits in front of the contract, giving you fully-typed access to every operation.
 
@@ -22,8 +22,6 @@ package main
 import (
     "context"
     "fmt"
-    "math/big"
-    "time"
 
     rail0 "github.com/rail0/go-sdk"
 )
@@ -32,79 +30,77 @@ func main() {
     client := rail0.NewClient(rail0.ClientOptions{
         BaseURL: "https://api.rail0.xyz",
     })
-
     ctx := context.Background()
-    now := time.Now().Unix()
 
-    payment := rail0.Payment{
-        Payer:               "0xBuyer...",
-        Payee:               "0xMerchant...",
-        Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-        Amount:              "100000000",                                    // 100 USDC (6 decimals)
-        AuthorizationExpiry: now + 3600*24,                                 // 24 h to capture
-        RefundExpiry:        now + 3600*24*7,                               // 7-day refund window
-        FeeBps:              0,
-        FeeReceiver:         "0x0000000000000000000000000000000000000000",
-    }
+    // Step 1 — discover payment methods
+    methods, _ := client.Merchants.PaymentMethods(ctx, 1)
+    usdc := methods[0] // pick USDC on the target chain
 
-    paymentID := "0xabc..." // your unique identifier for this payment
+    // Step 2 — create payment intent
+    resp, _ := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
+        Payment: rail0.PaymentConfig{
+            Payer: "0xBuyer...",
+            Payee: usdc.WalletAddress,
+            Token: usdc.TokenAddress,
+        },
+        Amount:  "50000000", // 50 USDC (6 decimals)
+        ChainID: int64(usdc.ChainID),
+        Mode:    "authorize",
+    })
 
-    // Step 1 — get the nonce for the payer's EIP-3009 signature
-    nonceResp, _ := client.Payments.AuthorizeNonce(ctx, paymentID, payment.Payer)
-
-    // Step 2 — sign off-chain (payer's private key never leaves the client)
-    key, _ := rail0.HexToPrivateKey("0x...") // payer's private key
+    // Step 3 — payer signs the EIP-3009 payload off-chain
+    key, _ := rail0.HexToPrivateKey("0x...")
     sig, _ := rail0.SignAuthorize(rail0.SignPaymentParams{
         PrivateKey:      key,
-        Payment:         payment,
-        Amount:          big.NewInt(50_000_000), // 50 USDC
-        Nonce:           nonceResp.Nonce,
-        ContractAddress: "0xRAIL0ContractAddress...",
+        Payment:         resp.Payment,
+        Amount:          resp.Amount,
+        Nonce:           resp.SigningPayload.Message.Nonce,
+        ContractAddress: resp.Rail0Contract,
         TokenDomain: rail0.TokenDomain{
             Name:              "USD Coin",
             Version:           "2",
-            ChainID:           8453,
-            VerifyingContract: payment.Token,
+            ChainID:           int64(usdc.ChainID),
+            VerifyingContract: usdc.TokenAddress,
         },
     })
 
-    // Step 3 — payer locks funds in escrow
-    _, _ = client.Payments.Authorize(ctx, paymentID, rail0.AuthorizeParams{
-        Payment: payment,
-        Amount:  "50000000",
-        V:       sig.V,
-        R:       sig.R,
-        S:       sig.S,
+    // Step 4 — submit payer signature
+    client.Payments.Sign(ctx, resp.PaymentID, rail0.PayerSignatureRequest{
+        V: sig.V, R: sig.R, S: sig.S,
     })
 
-    // Step 4 — merchant releases them
-    tx, _ := client.Payments.Capture(ctx, paymentID, rail0.CaptureParams{
-        Payment: payment,
-        Amount:  "50000000",
+    // Step 5 — payee prepares the unsigned authorize tx
+    tx, _ := client.Payments.Authorize(ctx, resp.PaymentID)
+    // sign tx.UnsignedTransaction with payee's EIP-1559 key
+
+    // Step 6 — broadcast signed authorize tx
+    client.Payments.SubmitAuthorize(ctx, resp.PaymentID, rail0.SubmitTransactionRequest{
+        SignedTransaction: signedBytes,
     })
 
-    fmt.Println(tx.TransactionHash, tx.Status)
+    fmt.Println("authorized:", resp.PaymentID)
 }
 ```
 
 ## Payment lifecycle
 
 ```text
-                        authorizationExpiry         refundExpiry
-                               │                         │
-  ─────────────────────────────┼─────────────────────────┼──────▶ time
-   authorize / charge           │   capture / void         │   refund
-                                │   release (permissionless)
+                            authorizationExpiry       refundExpiry
+                                   │                       │
+  ─────────────────────────────────┼───────────────────────┼──────▶ time
+   create → sign → authorize       │   capture / void       │   approve+refund
+                                    │   release              │
 ```
 
 | Operation | Caller | What it does |
 |-----------|--------|--------------|
-| `Authorize` | payer | Locks `amount` in escrow via EIP-3009 signature |
-| `Charge` | payer | Authorize + capture in one transaction |
-| `Capture` | payee | Moves escrowed funds to the merchant |
-| `Void` | payee | Cancels the hold, returns funds to the payer |
-| `Release` | anyone | Reclaims escrow after `authorizationExpiry` with no capture |
-| `Refund` | payee | Returns previously captured funds to the payer |
+| `Authorize` + `SubmitAuthorize` | payee | Prepare + broadcast the authorize tx; funds move to escrow |
+| `Charge` | payee | Server-side one-shot: authorize + capture with no escrow window |
+| `PrepareCapture` + `SubmitCapture` | payee | Moves escrowed funds to the merchant |
+| `PrepareVoid` + `SubmitVoid` | payee | Cancels the hold, returns funds to the payer |
+| `PrepareRelease` + `SubmitRelease` | anyone | Reclaims escrow after `AuthorizationExpiry` |
+| `PrepareApprove` + `SubmitApprove` | payee | ERC-20 `approve()` required before a refund |
+| `PrepareRefund` + `SubmitRefund` | payee | Returns captured funds to the payer |
 
 ## API reference
 
@@ -114,11 +110,10 @@ func main() {
 client := rail0.NewClient(rail0.ClientOptions{
     BaseURL:    "https://api.rail0.xyz",
     Headers:    map[string]string{"Authorization": "Bearer ..."},
-    Timeout:    30 * time.Second,     // default 30s
-    MaxRetries: 3,                    // default 0 (no retry)
+    Timeout:    30 * time.Second,       // default 30s
+    MaxRetries: 3,                      // default 0 (no retry)
     RetryDelay: 200 * time.Millisecond, // base delay, doubles each attempt
-    Logger:     rail0.DebugLogger,    // optional
-    Transport:  myTransport,          // optional — custom http.RoundTripper
+    Logger:     rail0.DebugLogger,      // optional
 })
 ```
 
@@ -138,8 +133,8 @@ client := rail0.NewClient(rail0.ClientOptions{
 
 Output:
 ```text
-[rail0] POST 202 http://... /payments/0x.../authorize 87ms
-[rail0] ERROR GET http://... /payments/0x... 30001ms
+[rail0] POST 200 https://.../payments 87ms
+[rail0] ERROR PUT https://.../payments/0x.../sign 30001ms
 ```
 
 To integrate with `slog`, `zap`, or `zerolog`:
@@ -157,132 +152,125 @@ client := rail0.NewClient(rail0.ClientOptions{
 })
 ```
 
-`LogEntry` fields:
+---
 
-| Field | Type | Present |
-|-------|------|---------|
-| `Method` | `string` | always |
-| `URL` | `string` | always |
-| `DurationMs` | `int64` | always |
-| `RequestBody` | `any` | POST requests |
-| `Status` | `int` | when a response was received (0 on network error) |
-| `ResponseBody` | `any` | when a response was received |
-| `Err` | `error` | on HTTP errors and network failures |
-| `Attempt` | `int` | when `MaxRetries > 0` |
-| `WillRetry` | `bool` | when `MaxRetries > 0` and a retry is scheduled |
+### `client.Merchants`
+
+#### `.PaymentMethods(ctx, merchantID)` → `([]PaymentMethod, error)`
+
+Returns the active payment methods (chain + token + wallet) for a merchant.
+
+```go
+methods, err := client.Merchants.PaymentMethods(ctx, 1)
+// methods[0].ChainID, .TokenAddress, .WalletAddress, .TokenSymbol, .ChainSlug
+```
 
 ---
 
 ### `client.Payments`
 
-All methods take `ctx context.Context` as first argument and return `(*T, error)`.
+All methods take `ctx context.Context` and return `(*T, error)`.
 
-#### `.Get(ctx, paymentID)`
+#### `.Get(ctx, paymentID)` → `*PaymentResponse`
 
-Returns the on-chain state and config hash for a payment.
+Fetches the current payment state (DB status + live on-chain escrow balances).
 
 ```go
-res, err := client.Payments.Get(ctx, paymentID)
-// res.State: { Exists, CapturableAmount, RefundableAmount }
-// res.ConfigHash: EIP-712 digest committed on creation
+res, _ := client.Payments.Get(ctx, paymentID)
+// res.Status, res.OnChain.CapturableAmount, res.OnChain.RefundableAmount
 ```
 
-#### `.Authorize(ctx, paymentID, params)`
+#### `.CreatePayment(ctx, params)` → `*CreatePaymentResponse`
 
-Locks `Amount` from the payer into escrow. Build the EIP-3009 signature with `SignAuthorize`.
+Creates a payment intent. Returns `SigningPayload` for the payer to sign, plus `Rail0Contract`.
 
-#### `.Charge(ctx, paymentID, params)`
+#### `.Sign(ctx, paymentID, params)` → `*PayerSignatureResponse`
 
-Authorize and capture in one transaction. Build the EIP-3009 signature with `SignCharge`.
+Submits the payer's EIP-712 signature (v, r, s).
 
-#### `.Capture(ctx, paymentID, params)` / `.Void(ctx, paymentID, params)`
+#### `.Authorize(ctx, paymentID)` → `*PrepareTransactionResponse`
 
-Capture escrowed funds or void (return them to payer). Caller must be the payee.
+Prepares the unsigned `authorize()` transaction. Called by the payee. Sign `UnsignedTransaction` with the payee's key and pass to `SubmitAuthorize`.
 
-#### `.Release(ctx, paymentID, params)`
+#### `.SubmitAuthorize(ctx, paymentID, params)` → `*AuthorizePaymentResponse`
 
-Return escrowed funds to the payer after `AuthorizationExpiry`. Permissionless.
-
-#### `.Refund(ctx, paymentID, params)`
-
-Return a previously captured amount to the payer. Must be called before `RefundExpiry`.
-
-#### `.AuthorizeNonce(ctx, paymentID, payer)` / `.ChargeNonce(ctx, paymentID, payer)`
-
-Returns the EIP-3009 nonce to include in the payer's signature.
-
-#### `.Hash(ctx, payment)`
-
-Computes the EIP-712 digest of a `Payment` configuration.
-
----
-
-### `client.Tokens`
-
-#### `.IsAccepted(ctx, address)`
-
-Returns whether the given ERC-20 token is in this deployment's allowlist.
-
----
-
-### `client.Utils`
-
-#### `.DomainSeparator(ctx)`
-
-Returns the EIP-712 domain separator for the RAIL0 contract.
-
-#### `.Version(ctx)`
-
-Returns the contract version number.
-
----
-
-### Off-chain signing
-
-RAIL0 uses EIP-3009 `transferWithAuthorization` — the payer signs a payload off-chain and the API submits the transaction on their behalf (gasless for the payer).
+Broadcasts the signed authorize transaction. Funds are moved to escrow.
 
 ```go
-// 1. Get the nonce for this (paymentId, payer) pair
-nonce, _ := client.Payments.AuthorizeNonce(ctx, paymentID, payment.Payer)
+tx, _ := client.Payments.Authorize(ctx, paymentID)
+res, _ := client.Payments.SubmitAuthorize(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: signedBytes,
+})
+// res.TransactionHash, res.CapturableAmount
+```
 
-// 2. Sign
+#### `.Charge(ctx, paymentID)` → `*ChargePaymentResponse`
+
+Server-side one-shot: authorize + capture in a single transaction. No `Submit` step. Called by the payee.
+
+#### `.PrepareCapture(ctx, paymentID, params)` / `.SubmitCapture(ctx, paymentID, params)`
+
+Build and broadcast the capture transaction. Partial captures are supported.
+
+```go
+tx, _ := client.Payments.PrepareCapture(ctx, paymentID, rail0.CapturePaymentRequest{Amount: "50000000"})
+res, _ := client.Payments.SubmitCapture(ctx, paymentID, rail0.SubmitTransactionRequest{SignedTransaction: signed})
+// res.CapturedAmount, res.CapturableAmount, res.RefundableAmount
+```
+
+#### `.PrepareVoid(ctx, paymentID)` / `.SubmitVoid(ctx, paymentID, params)`
+
+Void the authorization — releases all escrowed funds to the payer.
+
+#### `.PrepareRelease(ctx, paymentID, params)` / `.SubmitRelease(ctx, paymentID, params)`
+
+Release escrowed funds after `AuthorizationExpiry`. Set `CallerAddress` in `ReleaseRequest` to build the tx for the buyer.
+
+```go
+tx, _ := client.Payments.PrepareRelease(ctx, paymentID, rail0.ReleaseRequest{CallerAddress: buyerAddr})
+client.Payments.SubmitRelease(ctx, paymentID, rail0.SubmitTransactionRequest{SignedTransaction: buyerSigned})
+```
+
+#### `.PrepareApprove(ctx, paymentID, params)` / `.SubmitApprove(ctx, paymentID, params)`
+
+ERC-20 `approve()` before a refund. Include `Amount` in `SubmitApproveRequest` so the API records it.
+
+```go
+tx, _ := client.Payments.PrepareApprove(ctx, paymentID, rail0.ApproveRequest{Amount: "50000000"})
+client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitApproveRequest{
+    SignedTransaction: signed, Amount: "50000000",
+})
+```
+
+#### `.PrepareRefund(ctx, paymentID, params)` / `.SubmitRefund(ctx, paymentID, params)`
+
+Build and broadcast the refund transaction. Partial refunds are supported.
+
+---
+
+## Off-chain signing
+
+RAIL0 uses EIP-3009 `transferWithAuthorization` — the payer signs off-chain and the API submits on their behalf (gasless for the payer).
+
+```go
 key, _ := rail0.HexToPrivateKey("0xYourPrivateKey...")
 sig, err := rail0.SignAuthorize(rail0.SignPaymentParams{
     PrivateKey:      key,
-    Payment:         payment,
-    Amount:          big.NewInt(50_000_000),
-    Nonce:           nonce.Nonce,
-    ContractAddress: "0xRAIL0...",
+    Payment:         resp.Payment,
+    Amount:          resp.Amount,
+    Nonce:           resp.SigningPayload.Message.Nonce,
+    ContractAddress: resp.Rail0Contract,
     TokenDomain: rail0.TokenDomain{
         Name:              "USD Coin",
         Version:           "2",
-        ChainID:           8453,
-        VerifyingContract: payment.Token,
+        ChainID:           84532,
+        VerifyingContract: token,
     },
 })
-
-// 3. Submit
-client.Payments.Authorize(ctx, paymentID, rail0.AuthorizeParams{
-    Payment: payment,
-    Amount:  "50000000",
-    V: sig.V, R: sig.R, S: sig.S,
-})
+// sig.V, sig.R, sig.S — pass to Sign()
 ```
 
-`SignCharge` works the same way — use `.ChargeNonce` to obtain the nonce.
-
-For raw control use `SignTransferWithAuthorization`:
-
-```go
-sig, err := rail0.SignTransferWithAuthorization(key, domain, rail0.SignTransferParams{
-    From:        payment.Payer,
-    To:          contractAddress,
-    Value:       big.NewInt(50_000_000),
-    ValidAfter:  new(big.Int), // 0 = immediate
-    ValidBefore: big.NewInt(payment.AuthorizationExpiry),
-    Nonce:       nonce.Nonce,
-})
-```
+Use `SignCharge` instead of `SignAuthorize` when `mode: "charge"`.
 
 ---
 
@@ -293,28 +281,25 @@ sig, err := rail0.SignTransferWithAuthorization(key, domain, rail0.SignTransferP
 tokens := rail0.EIP3009Tokens("base")
 // tokens[0]: { Symbol: "USDC", Address: "0x833...", Decimals: 6 }
 
-// All chains
-for chain, info := range rail0.Stablecoins {
-    fmt.Printf("%s (chainId %d): %d tokens\n", chain, info.ChainID, len(info.Tokens))
-}
+// Chain metadata
+info := rail0.ChainInfo("base")
+fmt.Println(info.ChainID) // 8453
 ```
 
 ---
 
-### Error handling
+## Error handling
 
 Every non-2xx response is returned as `*APIError`:
 
 ```go
 import "errors"
 
-tx, err := client.Payments.Capture(ctx, paymentID, params)
+_, err := client.Payments.SubmitCapture(ctx, paymentID, params)
 if err != nil {
     var apiErr *rail0.APIError
     if errors.As(err, &apiErr) {
-        fmt.Println(apiErr.Status)  // 422
-        fmt.Println(apiErr.Code)    // "AuthorizationExpired"
-        fmt.Println(apiErr.Message) // human-readable
+        fmt.Println(apiErr.Status, apiErr.Code, apiErr.Message)
     }
     return err
 }
@@ -326,63 +311,45 @@ Common error codes:
 |------|-------|
 | `PaymentAlreadyExists` | `Authorize`/`Charge` called twice with the same `paymentId` |
 | `PaymentNotFound` | `paymentId` does not exist |
-| `PaymentMismatch` | `payment` config does not match the stored hash |
-| `AuthorizationExpired` | `AuthorizationExpiry` is in the past (Capture) |
-| `AuthorizationNotExpired` | `AuthorizationExpiry` has not passed yet (Release) |
+| `AuthorizationExpired` | `AuthorizationExpiry` is in the past (capture) |
+| `AuthorizationNotExpired` | `AuthorizationExpiry` has not passed yet (release) |
 | `RefundExpired` | `RefundExpiry` is in the past |
 | `InvalidAmount` | `amount` is 0 |
-| `TokenNotAccepted` | token is not in this deployment's allowlist |
 | `NotPayee` | caller is not `payment.Payee` |
 
 ---
 
 ## Development
 
-### Run tests
-
 ```bash
 go test ./...
-```
 
-### Regenerate types after an API change
-
-```bash
+# Regenerate types_gen.go after an API change:
 # 1. Update the schema in rail0-api (sibling repo),
 #    or set RAIL0_SCHEMA_PATH to point to a local file.
-
-# 2. Regenerate types_gen.go
+# 2. Regenerate:
 go run gen/generate.go
-
-# 3. Check for breakage
 go build ./...
-go test ./...
 ```
-
----
 
 ## Project structure
 
 ```text
-gen/              Generation pipeline (schema from rail0-api)
-  generate.go     generates types_gen.go from the schema
-
-test/             test suite
-  signing_test.go signing utility tests (EIP-712 cross-check)
-  client_test.go  HTTP client tests (retry, logging, error handling)
-  integration_test.go  endpoint shape tests (httptest mock server)
-
 *.go              package rail0 — SDK source
   client.go       Client struct and NewClient
-  types.go        public types (hand-documented)
-  error.go        *APIError
-  http.go         internal HTTP client (retry, logging)
+  merchants.go    MerchantsService
   payments.go     PaymentsService
-  tokens.go       TokensService
-  utils.go        UtilsService
+  types.go        public types (hand-documented)
+  types_gen.go    generated types (never hand-edited)
   signing.go      EIP-712/EIP-3009 off-chain signing
   stablecoins.go  stablecoin address registry
+  http.go         internal HTTP client (retry, logging)
+  error.go        *APIError
 
-go.mod / go.sum   module definition
+gen/
+  generate.go     generates types_gen.go from the schema
+
+go.mod / go.sum
 README.md
 ```
 
