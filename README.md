@@ -38,13 +38,13 @@ func main() {
 
     // Step 2 — create payment intent
     resp, _ := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
-        Payment: rail0.PaymentConfig{
-            Payer: "0xBuyer...",
-            Payee: usdc.WalletAddress,
-            Token: usdc.TokenAddress,
+        Payment: rail0.PaymentInput{
+            Payer:  "0xBuyer...",
+            Payee:  usdc.WalletAddress,
+            Token:  usdc.TokenAddress,
+            Amount: "50000000", // 50 USDC (6 decimals)
         },
-        Amount:  "50000000", // 50 USDC (6 decimals)
-        ChainID: int64(usdc.ChainID),
+        ChainId: usdc.ChainID,
         Mode:    "authorize",
     })
 
@@ -53,7 +53,7 @@ func main() {
     sig, _ := rail0.SignAuthorize(rail0.SignPaymentParams{
         PrivateKey:      key,
         Payment:         resp.Payment,
-        Amount:          resp.Amount,
+        Amount:          resp.Payment.Amount,
         Nonce:           resp.SigningPayload.Message.Nonce,
         ContractAddress: resp.Rail0Contract,
         TokenDomain: rail0.TokenDomain{
@@ -65,21 +65,21 @@ func main() {
     })
 
     // Step 4 — submit payer signature
-    client.Payments.Sign(ctx, resp.PaymentID, rail0.PayerSignatureRequest{
+    client.Payments.Sign(ctx, resp.PaymentId, rail0.PayerSignatureRequest{
         V: sig.V, R: sig.R, S: sig.S,
     })
 
     // Step 5 — payee prepares the unsigned authorize tx
-    tx, _ := client.Payments.Authorize(ctx, resp.PaymentID)
+    tx, _ := client.Payments.Authorize(ctx, resp.PaymentId)
     // sign tx.UnsignedTransaction with payee's EIP-1559 key → signedBytes
 
     // Step 6 — broadcast signed authorize tx
-    client.Payments.Submit(ctx, resp.PaymentID, rail0.SubmitTransactionRequest{
+    client.Payments.Submit(ctx, resp.PaymentId, rail0.SubmitTransactionRequest{
         SignedTransaction: signedBytes,
     })
     // returns HTTP 202; poll Payments.Get until status leaves "submitting"
 
-    fmt.Println("authorized:", resp.PaymentID)
+    fmt.Println("authorized:", resp.PaymentId)
 }
 ```
 
@@ -312,7 +312,10 @@ key, _ := rail0.HexToPrivateKey("0xYourPrivateKey...")
 sig, err := rail0.SignAuthorize(rail0.SignPaymentParams{
     PrivateKey:      key,
     Payment:         resp.Payment,
-    Amount:          resp.Amount,
+    Amount: func() *big.Int {
+        n, _ := new(big.Int).SetString(string(resp.Payment.Amount), 10)
+        return n
+    }(),
     Nonce:           resp.SigningPayload.Message.Nonce,
     ContractAddress: resp.Rail0Contract,
     TokenDomain: rail0.TokenDomain{
