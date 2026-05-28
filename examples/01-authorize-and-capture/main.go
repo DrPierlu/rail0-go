@@ -7,10 +7,10 @@
 //
 // On-chain flow:
 //
-//	payer signs EIP-712    → Authorize+SubmitAuthorize   funds move payer → escrow
-//	payee signs capture tx → PrepareCapture+SubmitCapture funds move escrow → payee (minus fee)
-//	payee signs void tx    → PrepareVoid+SubmitVoid       alternative: funds move escrow → payer
-//	anyone                 → PrepareRelease+SubmitRelease fallback after authorizationExpiry
+//	payer signs EIP-712    → Authorize + Submit   funds move payer → escrow
+//	payee signs capture tx → PrepareCapture + Submit funds move escrow → payee (minus fee)
+//	payee signs void tx    → PrepareVoid + Submit    alternative: funds move escrow → payer
+//	anyone                 → PrepareRelease + Submit  fallback after authorizationExpiry
 //
 // Run:
 //
@@ -101,13 +101,15 @@ func main() {
 	//   signedAuthTx := payeeWallet.SignTransaction(prepAuth.UnsignedTransaction)
 	signedAuthTx := "0x02f8..." // placeholder — use eth_signTransaction or secp256k1 library
 
-	authResp, err := client.Payments.SubmitAuthorize(ctx, createResp.PaymentId,
+	// Submit returns 202 immediately with status "submitting".
+	// Poll Payments.Get until status advances to "authorized".
+	authSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedAuthTx})
 	if err != nil {
-		log.Fatalf("SubmitAuthorize: %v", err)
+		log.Fatalf("Submit (authorize): %v", err)
 	}
-	fmt.Printf("Authorized: tx=%s capturable=%s\n",
-		authResp.TransactionHash, authResp.CapturableAmount)
+	fmt.Printf("Authorize enqueued: id=%s status=%s\n", authSubmit.Rail0ID, authSubmit.Status)
+	// poll until status == "authorized": client.Payments.Get(ctx, createResp.PaymentId)
 
 	// ----------------------------------------------------------------
 	// Step 4a — Payee prepares and submits a capture transaction
@@ -124,17 +126,17 @@ func main() {
 	signedCaptureTx := "0x02f8..." // placeholder
 	_ = prepCapture
 
-	captureResp, err := client.Payments.SubmitCapture(ctx, createResp.PaymentId,
+	// Submit returns 202 immediately. Poll until status == "captured" or "partially_captured".
+	captureSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedCaptureTx})
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
-			log.Fatalf("SubmitCapture failed [%s]: %s", apiErr.Code, apiErr.Message)
+			log.Fatalf("Submit (capture) failed [%s]: %s", apiErr.Code, apiErr.Message)
 		}
-		log.Fatalf("SubmitCapture: %v", err)
+		log.Fatalf("Submit (capture): %v", err)
 	}
-	fmt.Printf("Captured: tx=%s captured=%s\n",
-		captureResp.TransactionHash, captureResp.CapturedAmount)
+	fmt.Printf("Capture enqueued: id=%s status=%s\n", captureSubmit.Rail0ID, captureSubmit.Status)
 
 	// ----------------------------------------------------------------
 	// Step 4b — Alternatively: payee voids (order cancelled)
@@ -142,7 +144,7 @@ func main() {
 
 	// prepVoid, _ := client.Payments.PrepareVoid(ctx, createResp.PaymentId)
 	// signedVoidTx := payeeWallet.SignTransaction(prepVoid.UnsignedTransaction)
-	// client.Payments.SubmitVoid(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedVoidTx})
+	// client.Payments.Submit(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedVoidTx})
 
 	// ----------------------------------------------------------------
 	// Step 4c — Release (fallback after authorizationExpiry, permissionless)
@@ -150,5 +152,5 @@ func main() {
 
 	// prepRelease, _ := client.Payments.PrepareRelease(ctx, createResp.PaymentId, rail0.ReleaseRequest{})
 	// signedReleaseTx := payeeWallet.SignTransaction(prepRelease.UnsignedTransaction)
-	// client.Payments.SubmitRelease(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedReleaseTx})
+	// client.Payments.Submit(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedReleaseTx})
 }

@@ -46,31 +46,13 @@ func (s *PaymentsService) Authorize(ctx context.Context, paymentID Bytes32) (*Pr
 	return &out, nil
 }
 
-// SubmitAuthorize broadcasts a signed authorize transaction. Called by the payee.
-func (s *PaymentsService) SubmitAuthorize(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*AuthorizePaymentResponse, error) {
-	var out AuthorizePaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize/submit", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // Charge builds the unsigned charge() transaction. The payer signature must have been
 // submitted first via Sign. Charge is a one-shot alternative to Authorize+Capture:
 // funds are transferred directly to the payee without an escrow window.
-// Sign the returned UnsignedTransaction and submit it with SubmitCharge.
+// Sign the returned UnsignedTransaction and submit it with Submit.
 func (s *PaymentsService) Charge(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge", nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// SubmitCharge broadcasts a signed charge transaction. Called by the payee.
-func (s *PaymentsService) SubmitCharge(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*ChargePaymentResponse, error) {
-	var out ChargePaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -85,28 +67,10 @@ func (s *PaymentsService) PrepareCapture(ctx context.Context, paymentID Bytes32,
 	return &out, nil
 }
 
-// SubmitCapture broadcasts a signed capture transaction. Called by the payee.
-func (s *PaymentsService) SubmitCapture(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*CapturePaymentResponse, error) {
-	var out CapturePaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/capture/submit", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // PrepareVoid builds the unsigned void() transaction. Called by the payee.
 func (s *PaymentsService) PrepareVoid(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/void", nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// SubmitVoid broadcasts a signed void transaction. Called by the payee.
-func (s *PaymentsService) SubmitVoid(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*VoidPaymentResponse, error) {
-	var out VoidPaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/void/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -123,29 +87,10 @@ func (s *PaymentsService) PrepareRelease(ctx context.Context, paymentID Bytes32,
 	return &out, nil
 }
 
-// SubmitRelease broadcasts a signed release transaction.
-func (s *PaymentsService) SubmitRelease(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*ReleasePaymentResponse, error) {
-	var out ReleasePaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/release/submit", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // PrepareApprove builds the unsigned ERC-20 approve() transaction needed before a refund. Called by the payee.
 func (s *PaymentsService) PrepareApprove(ctx context.Context, paymentID Bytes32, params ApproveRequest) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/approve", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// SubmitApprove broadcasts a signed ERC-20 approve transaction. Called by the payee.
-// Set Amount in params so the API records the approved amount in the transaction log.
-func (s *PaymentsService) SubmitApprove(ctx context.Context, paymentID Bytes32, params SubmitApproveRequest) (*ApproveResponse, error) {
-	var out ApproveResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/approve/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -160,10 +105,15 @@ func (s *PaymentsService) PrepareRefund(ctx context.Context, paymentID Bytes32, 
 	return &out, nil
 }
 
-// SubmitRefund broadcasts a signed refund transaction. Called by the payee.
-func (s *PaymentsService) SubmitRefund(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*RefundPaymentResponse, error) {
-	var out RefundPaymentResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/refund/submit", params, &out); err != nil {
+// Submit enqueues a signed transaction for asynchronous broadcast.
+// The operation is inferred from pending_operation set by the preceding prepare step
+// (Authorize, Charge, PrepareCapture, PrepareVoid, PrepareRelease, PrepareApprove, PrepareRefund).
+//
+// Returns HTTP 202 immediately with status "submitting". Poll Payments.Get until
+// status leaves "submitting" to learn the final on-chain outcome.
+func (s *PaymentsService) Submit(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/transactions/submit", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

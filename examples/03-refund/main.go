@@ -7,8 +7,8 @@
 //
 // On-chain flow:
 //
-//	payee signs approve tx → approve()  RAIL0 contract approved as spender
-//	payee signs refund tx  → Refund()   funds move payee → payer
+//	payee signs approve tx → PrepareApprove + Submit  RAIL0 contract approved as spender
+//	payee signs refund tx  → PrepareRefund + Submit   funds move payee → payer
 //
 // Run:
 //
@@ -48,15 +48,15 @@ func main() {
 	// Payee signs prepApprove.UnsignedTransaction offline, then submits:
 	//   signedApproveTx := payeeWallet.SignTransaction(prepApprove.UnsignedTransaction)
 	signedApproveTx := "0x02f8..." // placeholder
-
-	approveResp, err := client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitApproveRequest{
-		SignedTransaction: signedApproveTx,
-	})
-	if err != nil {
-		log.Fatalf("SubmitApprove: %v", err)
-	}
-	fmt.Printf("Approved: tx=%s spender=%s\n", approveResp.TransactionHash, approveResp.Spender)
 	_ = prepApprove
+
+	// Submit returns 202 immediately. Poll until status shows approve confirmed.
+	approveSubmit, err := client.Payments.Submit(ctx, paymentID,
+		rail0.SubmitTransactionRequest{SignedTransaction: signedApproveTx})
+	if err != nil {
+		log.Fatalf("Submit (approve): %v", err)
+	}
+	fmt.Printf("Approve enqueued: id=%s status=%s\n", approveSubmit.Rail0ID, approveSubmit.Status)
 
 	// ----------------------------------------------------------------
 	// Step 2 — Payee prepares and submits a refund transaction
@@ -72,19 +72,20 @@ func main() {
 	// Payee signs prepRefund.UnsignedTransaction offline, then submits:
 	//   signedRefundTx := payeeWallet.SignTransaction(prepRefund.UnsignedTransaction)
 	signedRefundTx := "0x02f8..." // placeholder
+	_ = prepRefund
 
-	refundResp, err := client.Payments.SubmitRefund(ctx, paymentID, rail0.SubmitTransactionRequest{
-		SignedTransaction: signedRefundTx,
-	})
+	// Submit returns 202 immediately. Poll until status == "refunded" or "partially_refunded".
+	refundSubmit, err := client.Payments.Submit(ctx, paymentID,
+		rail0.SubmitTransactionRequest{SignedTransaction: signedRefundTx})
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
-			log.Fatalf("SubmitRefund failed [%s]: %s", apiErr.Code, apiErr.Message)
+			log.Fatalf("Submit (refund) failed [%s]: %s", apiErr.Code, apiErr.Message)
 		}
-		log.Fatalf("SubmitRefund: %v", err)
+		log.Fatalf("Submit (refund): %v", err)
 	}
 
-	fmt.Printf("Refunded: tx=%s refunded=%s remaining=%s\n",
-		refundResp.TransactionHash, refundResp.RefundedAmount, refundResp.RefundableAmount)
-	_ = prepRefund
+	fmt.Printf("Refund enqueued: id=%s status=%s\n", refundSubmit.Rail0ID, refundSubmit.Status)
+	// poll until status == "refunded" or "partially_refunded":
+	//   client.Payments.Get(ctx, paymentID)
 }

@@ -29,11 +29,15 @@ type ReleaseRequest struct {
 	CallerAddress Address `json:"callerAddress,omitempty"`
 }
 
-// SubmitApproveRequest is the body for Payments.SubmitApprove.
-// Amount is optional but recommended so the API can record the approved amount.
-type SubmitApproveRequest struct {
-	SignedTransaction string        `json:"signedTransaction"`
-	Amount           Uint256String `json:"amount,omitempty"`
+// SubmitTransactionAcceptedResponse is returned by Payments.Submit (HTTP 202).
+// The submission is asynchronous — poll Payments.Get until status leaves "submitting"
+// to learn whether the transaction was confirmed on-chain.
+// Token and Spender are populated only when the pending operation is "approve".
+type SubmitTransactionAcceptedResponse struct {
+	Rail0ID string `json:"rail0_id"`
+	Status  string `json:"status"` // always "submitting"
+	Token   string `json:"token,omitempty"`
+	Spender string `json:"spender,omitempty"`
 }
 
 // APIErrorBody is the JSON shape of error responses from the RAIL0 API.

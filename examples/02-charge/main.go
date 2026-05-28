@@ -7,7 +7,7 @@
 //
 // On-chain flow:
 //
-//	payer signs EIP-712 → Charge+SubmitCharge  funds move payer → payee (minus fee), atomically
+//	payer signs EIP-712 → Charge + Submit  funds move payer → payee (minus fee), atomically
 //
 // Run:
 //
@@ -93,16 +93,18 @@ func main() {
 	//   signedChargeTx := payeeWallet.SignTransaction(prepCharge.UnsignedTransaction)
 	signedChargeTx := "0x02f8..." // placeholder
 
-	chargeResp, err := client.Payments.SubmitCharge(ctx, createResp.PaymentId,
+	// Submit returns 202 immediately with status "submitting".
+	// Poll Payments.Get until status advances to "charged".
+	chargeSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedChargeTx})
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
-			log.Fatalf("SubmitCharge failed [%s]: %s", apiErr.Code, apiErr.Message)
+			log.Fatalf("Submit (charge) failed [%s]: %s", apiErr.Code, apiErr.Message)
 		}
-		log.Fatalf("SubmitCharge: %v", err)
+		log.Fatalf("Submit (charge): %v", err)
 	}
 
-	fmt.Printf("Charged: tx=%s charged=%s fee=%s\n",
-		chargeResp.TransactionHash, chargeResp.ChargedAmount, chargeResp.FeeAmount)
+	fmt.Printf("Charge enqueued: id=%s status=%s\n", chargeSubmit.Rail0ID, chargeSubmit.Status)
+	// poll until status == "charged": client.Payments.Get(ctx, createResp.PaymentId)
 }
