@@ -71,12 +71,13 @@ func main() {
 
     // Step 5 — payee prepares the unsigned authorize tx
     tx, _ := client.Payments.Authorize(ctx, resp.PaymentID)
-    // sign tx.UnsignedTransaction with payee's EIP-1559 key
+    // sign tx.UnsignedTransaction with payee's EIP-1559 key → signedBytes
 
     // Step 6 — broadcast signed authorize tx
-    client.Payments.SubmitAuthorize(ctx, resp.PaymentID, rail0.SubmitTransactionRequest{
+    client.Payments.Submit(ctx, resp.PaymentID, rail0.SubmitTransactionRequest{
         SignedTransaction: signedBytes,
     })
+    // returns HTTP 202; poll Payments.Get until status leaves "submitting"
 
     fmt.Println("authorized:", resp.PaymentID)
 }
@@ -94,13 +95,29 @@ func main() {
 
 | Operation | Caller | What it does |
 |-----------|--------|--------------|
-| `Authorize` + `SubmitAuthorize` | payee | Prepare + broadcast the authorize tx; funds move to escrow |
-| `Charge` | payee | Server-side one-shot: authorize + capture with no escrow window |
-| `PrepareCapture` + `SubmitCapture` | payee | Moves escrowed funds to the merchant |
-| `PrepareVoid` + `SubmitVoid` | payee | Cancels the hold, returns funds to the payer |
-| `PrepareRelease` + `SubmitRelease` | anyone | Reclaims escrow after `AuthorizationExpiry` |
-| `PrepareApprove` + `SubmitApprove` | payee | ERC-20 `approve()` required before a refund |
-| `PrepareRefund` + `SubmitRefund` | payee | Returns captured funds to the payer |
+| `Authorize` + `Submit` | payee | Prepare + broadcast the authorize tx; funds move to escrow |
+| `Charge` + `Submit` | payee | Authorize + capture in a single transaction; no escrow window |
+| `PrepareCapture` + `Submit` | payee | Moves escrowed funds to the merchant |
+| `PrepareVoid` + `Submit` | payee | Cancels the hold, returns funds to the payer |
+| `PrepareRelease` + `Submit` | anyone | Reclaims escrow after `AuthorizationExpiry` |
+| `PrepareApprove` + `Submit` | payee | ERC-20 `approve()` required before a refund |
+| `PrepareRefund` + `Submit` | payee | Returns captured funds to the payer |
+
+### Payment status values
+
+| Status | Meaning |
+|--------|---------|
+| `created` | Payment intent created; awaiting payer signature |
+| `signed` | Payer signature recorded; ready to authorize or charge |
+| `submitting` | Signed transaction submitted; waiting for on-chain confirmation |
+| `submitted` | Transaction confirmed on-chain |
+| `authorized` | Funds held in escrow |
+| `partially_captured` | A partial capture has been settled |
+| `captured` | Full amount captured |
+| `voided` | Authorization cancelled; funds returned to payer |
+| `partially_refunded` | A partial refund has been issued |
+| `refunded` | Full amount refunded |
+| `failed` | Transaction failed on-chain |
 
 ## API reference
 
@@ -190,61 +207,99 @@ Submits the payer's EIP-712 signature (v, r, s).
 
 #### `.Authorize(ctx, paymentID)` → `*PrepareTransactionResponse`
 
-Prepares the unsigned `authorize()` transaction. Called by the payee. Sign `UnsignedTransaction` with the payee's key and pass to `SubmitAuthorize`.
+Prepares the unsigned `authorize()` transaction. Called by the payee. Sign `UnsignedTransaction` with the payee's key and pass to `Submit`.
 
-#### `.SubmitAuthorize(ctx, paymentID, params)` → `*AuthorizePaymentResponse`
+#### `.Charge(ctx, paymentID)` → `*PrepareTransactionResponse`
 
-Broadcasts the signed authorize transaction. Funds are moved to escrow.
+Prepares the unsigned charge transaction (authorize + capture in one). Called by the payee. Sign `UnsignedTransaction` with the payee's key and pass to `Submit`.
+
+#### `.PrepareCapture(ctx, paymentID, params)` → `*PrepareTransactionResponse`
+
+Prepares the unsigned capture transaction. Partial captures are supported.
+
+#### `.PrepareVoid(ctx, paymentID)` → `*PrepareTransactionResponse`
+
+Prepares the unsigned void transaction — releases all escrowed funds to the payer.
+
+#### `.PrepareRelease(ctx, paymentID, params)` → `*PrepareTransactionResponse`
+
+Prepares the unsigned release transaction for use after `AuthorizationExpiry`. Set `CallerAddress` in `ReleaseRequest` to build the tx for the buyer.
+
+#### `.PrepareApprove(ctx, paymentID, params)` → `*PrepareTransactionResponse`
+
+Prepares the unsigned ERC-20 `approve()` transaction required before a refund.
+
+#### `.PrepareRefund(ctx, paymentID, params)` → `*PrepareTransactionResponse`
+
+Prepares the unsigned refund transaction. Partial refunds are supported.
+
+#### `.Submit(ctx, paymentID, params)` → `*SubmitTransactionAcceptedResponse`
+
+Broadcasts a signed transaction for any operation — authorize, charge, capture, void, release, approve, or refund. This is the single submit endpoint used after every prepare step.
+
+Posts `POST /payments/:id/transactions/submit`. Returns HTTP 202 (accepted, async). Poll `.Get` until `Status` leaves `"submitting"`.
 
 ```go
-tx, _ := client.Payments.Authorize(ctx, paymentID)
-res, _ := client.Payments.SubmitAuthorize(ctx, paymentID, rail0.SubmitTransactionRequest{
+res, _ := client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
     SignedTransaction: signedBytes,
 })
-// res.TransactionHash, res.CapturableAmount
+// res.Rail0ID, res.Status == "submitting"
 ```
 
-#### `.Charge(ctx, paymentID)` → `*ChargePaymentResponse`
-
-Server-side one-shot: authorize + capture in a single transaction. No `Submit` step. Called by the payee.
-
-#### `.PrepareCapture(ctx, paymentID, params)` / `.SubmitCapture(ctx, paymentID, params)`
-
-Build and broadcast the capture transaction. Partial captures are supported.
+**Full authorize + capture example:**
 
 ```go
-tx, _ := client.Payments.PrepareCapture(ctx, paymentID, rail0.CapturePaymentRequest{Amount: "50000000"})
-res, _ := client.Payments.SubmitCapture(ctx, paymentID, rail0.SubmitTransactionRequest{SignedTransaction: signed})
-// res.CapturedAmount, res.CapturableAmount, res.RefundableAmount
+// Authorize
+tx, _ := client.Payments.Authorize(ctx, paymentID)
+// ... sign tx.UnsignedTransaction with payee key → authorizeSignedBytes
+client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: authorizeSignedBytes,
+})
+
+// Poll until authorized
+for {
+    res, _ := client.Payments.Get(ctx, paymentID)
+    if res.Status != "submitting" {
+        break
+    }
+    time.Sleep(2 * time.Second)
+}
+
+// Capture
+tx, _ = client.Payments.PrepareCapture(ctx, paymentID, rail0.CapturePaymentRequest{Amount: "50000000"})
+// ... sign tx.UnsignedTransaction → captureSignedBytes
+client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: captureSignedBytes,
+})
 ```
 
-#### `.PrepareVoid(ctx, paymentID)` / `.SubmitVoid(ctx, paymentID, params)`
+**Approve + refund example:**
 
-Void the authorization — releases all escrowed funds to the payer.
+```go
+// Approve
+tx, _ := client.Payments.PrepareApprove(ctx, paymentID, rail0.ApproveRequest{Amount: "50000000"})
+// ... sign tx.UnsignedTransaction → approveSignedBytes
+client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: approveSignedBytes,
+})
 
-#### `.PrepareRelease(ctx, paymentID, params)` / `.SubmitRelease(ctx, paymentID, params)`
+// Refund
+tx, _ = client.Payments.PrepareRefund(ctx, paymentID, rail0.RefundPaymentRequest{Amount: "50000000"})
+// ... sign tx.UnsignedTransaction → refundSignedBytes
+client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: refundSignedBytes,
+})
+```
 
-Release escrowed funds after `AuthorizationExpiry`. Set `CallerAddress` in `ReleaseRequest` to build the tx for the buyer.
+**Release example:**
 
 ```go
 tx, _ := client.Payments.PrepareRelease(ctx, paymentID, rail0.ReleaseRequest{CallerAddress: buyerAddr})
-client.Payments.SubmitRelease(ctx, paymentID, rail0.SubmitTransactionRequest{SignedTransaction: buyerSigned})
-```
-
-#### `.PrepareApprove(ctx, paymentID, params)` / `.SubmitApprove(ctx, paymentID, params)`
-
-ERC-20 `approve()` before a refund. Include `Amount` in `SubmitApproveRequest` so the API records it.
-
-```go
-tx, _ := client.Payments.PrepareApprove(ctx, paymentID, rail0.ApproveRequest{Amount: "50000000"})
-client.Payments.SubmitApprove(ctx, paymentID, rail0.SubmitApproveRequest{
-    SignedTransaction: signed, Amount: "50000000",
+// ... sign tx.UnsignedTransaction → releaseSignedBytes
+client.Payments.Submit(ctx, paymentID, rail0.SubmitTransactionRequest{
+    SignedTransaction: releaseSignedBytes,
 })
 ```
-
-#### `.PrepareRefund(ctx, paymentID, params)` / `.SubmitRefund(ctx, paymentID, params)`
-
-Build and broadcast the refund transaction. Partial refunds are supported.
 
 ---
 
@@ -295,7 +350,7 @@ Every non-2xx response is returned as `*APIError`:
 ```go
 import "errors"
 
-_, err := client.Payments.SubmitCapture(ctx, paymentID, params)
+_, err := client.Payments.Submit(ctx, paymentID, params)
 if err != nil {
     var apiErr *rail0.APIError
     if errors.As(err, &apiErr) {
