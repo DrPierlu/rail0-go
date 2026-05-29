@@ -10,6 +10,8 @@ package rail0
 type Client struct {
 	// Accounts exposes account configuration: PaymentMethods.
 	Accounts *AccountsService
+	// Auth exposes SIWE authentication: GetNonce, Verify.
+	Auth *AuthService
 	// Chains exposes the supported blockchain catalog.
 	Chains *ChainsService
 	// Tokens exposes the supported token catalog.
@@ -23,6 +25,7 @@ func NewClient(opts ClientOptions) *Client {
 	h := newHTTPClient(opts)
 	return &Client{
 		Accounts: &AccountsService{http: h},
+		Auth:     &AuthService{http: h},
 		Chains: &ChainsService{http: h},
 		Tokens: &TokensService{http: h},
 		Payments: &PaymentsService{http: h},

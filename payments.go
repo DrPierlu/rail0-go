@@ -9,6 +9,15 @@ type PaymentsService struct {
 	http *httpClient
 }
 
+// List returns all payments for the authenticated wallet (requires JWT).
+func (s *PaymentsService) List(ctx context.Context) ([]PaymentResponse, error) {
+	var out []PaymentResponse
+	if err := s.http.get(ctx, "/payments", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Get fetches the current payment state (DB status + live on-chain amounts).
 func (s *PaymentsService) Get(ctx context.Context, paymentID Bytes32) (*PaymentResponse, error) {
 	var out PaymentResponse
