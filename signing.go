@@ -19,11 +19,13 @@ import (
 const (
 	domainTypeStr   = "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
 	transferTypeStr = "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+	receiveTypeStr  = "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
 )
 
 var (
 	domainTypehash   = keccak256([]byte(domainTypeStr))
 	transferTypehash = keccak256([]byte(transferTypeStr))
+	receiveTypehash  = keccak256([]byte(receiveTypeStr))
 )
 
 // ================================================================
@@ -174,8 +176,20 @@ func hashStructTransfer(from, to Address, value, validAfter, validBefore *big.In
 }
 
 func buildDigest(domain TokenDomain, from, to Address, value, validAfter, validBefore *big.Int, nonce Bytes32) []byte {
+	return buildDigestWithTypehash(transferTypehash, domain, from, to, value, validAfter, validBefore, nonce)
+}
+
+func buildDigestWithTypehash(typehash []byte, domain TokenDomain, from, to Address, value, validAfter, validBefore *big.Int, nonce Bytes32) []byte {
 	ds := hashDomainSeparator(domain)
-	sh := hashStructTransfer(from, to, value, validAfter, validBefore, nonce)
+	sh := keccak256(concat(
+		typehash,
+		encodeAddress(from),
+		encodeAddress(to),
+		encodeUint256(value),
+		encodeUint256(validAfter),
+		encodeUint256(validBefore),
+		encodeBytes32(nonce),
+	))
 	return keccak256(concat([]byte{0x19, 0x01}, ds, sh))
 }
 
@@ -243,5 +257,15 @@ func SignAuthorize(params SignPaymentParams) (Eip3009Signature, error) {
 func SignCharge(params SignPaymentParams) (Eip3009Signature, error) {
 	digest := buildDigest(params.TokenDomain, params.Payment.Payer, params.ContractAddress,
 		params.Amount, new(big.Int), big.NewInt(params.Payment.AuthorizationExpiry), params.Nonce)
+	return doSign(params.PrivateKey, digest)
+}
+
+// SignReceiveWithAuthorization signs an EIP-3009 receiveWithAuthorization message.
+// Used for refund flows where the payee authorises the token transfer back to the payer.
+// The typehash differs from TransferWithAuthorization — FiatTokenV2 enforces both.
+func SignReceiveWithAuthorization(params SignPaymentParams) (Eip3009Signature, error) {
+	digest := buildDigestWithTypehash(receiveTypehash,
+		params.TokenDomain, params.Payment.Payer, params.ContractAddress,
+		params.Amount, new(big.Int), big.NewInt(params.Payment.RefundExpiry), params.Nonce)
 	return doSign(params.PrivateKey, digest)
 }
