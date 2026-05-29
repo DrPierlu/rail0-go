@@ -8,11 +8,13 @@ package rail0
 
 // Client is the entry point for the RAIL0 SDK.
 type Client struct {
-	// Merchants exposes merchant configuration: PaymentMethods.
-	Merchants *MerchantsService
-	// Payments exposes the full payment lifecycle: Get, CreatePayment, Sign, Authorize, SubmitAuthorize,
-	// Charge, PrepareCapture, SubmitCapture, PrepareVoid, SubmitVoid, PrepareRelease, SubmitRelease,
-	// PrepareApprove, SubmitApprove, PrepareRefund, SubmitRefund.
+	// Accounts exposes account configuration: PaymentMethods.
+	Accounts *AccountsService
+	// Chains exposes the supported blockchain catalog.
+	Chains *ChainsService
+	// Tokens exposes the supported token catalog.
+	Tokens *TokensService
+	// Payments exposes the full payment lifecycle.
 	Payments *PaymentsService
 }
 
@@ -20,7 +22,9 @@ type Client struct {
 func NewClient(opts ClientOptions) *Client {
 	h := newHTTPClient(opts)
 	return &Client{
-		Merchants: &MerchantsService{http: h},
-		Payments:  &PaymentsService{http: h},
+		Accounts: &AccountsService{http: h},
+		Chains: &ChainsService{http: h},
+		Tokens: &TokensService{http: h},
+		Payments: &PaymentsService{http: h},
 	}
 }

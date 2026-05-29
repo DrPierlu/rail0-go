@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("CreatePayment: %v", err)
 	}
 
-	fmt.Printf("Payment ID: %s\n", createResp.PaymentId)
+	fmt.Printf("Payment ID: %s\n", createResp.Rail0Id)
 
 	// The payer signs the signingPayload using eth_signTypedData_v4 or SignCharge:
 	//
@@ -68,7 +68,7 @@ func main() {
 	//   signature := "0x" + sig.R[2:] + sig.S[2:] + fmt.Sprintf("%02x", sig.V)
 
 	// Step 2 — Payer submits the 65-byte combined signature
-	_, err = client.Payments.Sign(ctx, createResp.PaymentId, rail0.PayerSignatureRequest{
+	_, err = client.Payments.Sign(ctx, createResp.Rail0Id, rail0.PayerSignatureRequest{
 		Signature: "0x1a2b3c...(130 hex chars from eth_signTypedData_v4)",
 	})
 	if err != nil {
@@ -79,7 +79,7 @@ func main() {
 	// Step 3 — Payee builds the charge transaction
 	// ----------------------------------------------------------------
 
-	prepCharge, err := client.Payments.Charge(ctx, createResp.PaymentId)
+	prepCharge, err := client.Payments.Charge(ctx, createResp.Rail0Id)
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
@@ -95,7 +95,7 @@ func main() {
 
 	// Submit returns 202 immediately with status "submitting".
 	// Poll Payments.Get until status advances to "charged".
-	chargeSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
+	chargeSubmit, err := client.Payments.Submit(ctx, createResp.Rail0Id,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedChargeTx})
 	if err != nil {
 		var apiErr *rail0.APIError
@@ -105,6 +105,6 @@ func main() {
 		log.Fatalf("Submit (charge): %v", err)
 	}
 
-	fmt.Printf("Charge enqueued: id=%s status=%s\n", chargeSubmit.Rail0ID, chargeSubmit.Status)
-	// poll until status == "charged": client.Payments.Get(ctx, createResp.PaymentId)
+	fmt.Printf("Charge enqueued: id=%s status=%s\n", chargeSubmit.Rail0Id, chargeSubmit.Status)
+	// poll until status == "charged": client.Payments.Get(ctx, createResp.Rail0Id)
 }

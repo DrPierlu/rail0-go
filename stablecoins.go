@@ -83,6 +83,25 @@ var Stablecoins = map[string]ChainStablecoins{
 			"cEUR": {Address: "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", Decimals: 18, EIP3009: true},
 		},
 	},
+	// Arc Testnet — FiatTokenV2 (Circle): both EIP-3009 and EIP-2612 confirmed on-chain
+	// (eth_call with full params: "authorization is expired" / "permit is expired" revert messages
+	// indicate the functions exist and validate inputs).
+	"arc-testnet": {
+		ChainID: 5042002,
+		Tokens: map[string]StablecoinInfo{
+			"USDC": {Address: "0x3600000000000000000000000000000000000000", Decimals: 6, EIP3009: true, EIP2612: true},
+			"EURC": {Address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", Decimals: 6, EIP3009: true, EIP2612: true},
+		},
+	},
+	// Celo Sepolia (Alfajores) — FiatTokenV2 (Circle), same implementation as Celo mainnet.
+	// EIP-3009 confirmed by mainnet parity; EIP-2612 assumed from FiatTokenV2 standard.
+	// RPC publicly unreachable at time of writing — verify when stable endpoint available.
+	"celo-sepolia": {
+		ChainID: 44787,
+		Tokens: map[string]StablecoinInfo{
+			"USDC": {Address: "0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B", Decimals: 6, EIP3009: true, EIP2612: true},
+		},
+	},
 }
 
 // StablecoinToken is a simplified token view returned by EIP3009Tokens and EIP2612Tokens.

@@ -56,7 +56,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Submit (approve): %v", err)
 	}
-	fmt.Printf("Approve enqueued: id=%s status=%s\n", approveSubmit.Rail0ID, approveSubmit.Status)
+	fmt.Printf("Approve enqueued: id=%s status=%s\n", approveSubmit.Rail0Id, approveSubmit.Status)
 
 	// ----------------------------------------------------------------
 	// Step 2 — Payee prepares and submits a refund transaction
@@ -85,7 +85,7 @@ func main() {
 		log.Fatalf("Submit (refund): %v", err)
 	}
 
-	fmt.Printf("Refund enqueued: id=%s status=%s\n", refundSubmit.Rail0ID, refundSubmit.Status)
+	fmt.Printf("Refund enqueued: id=%s status=%s\n", refundSubmit.Rail0Id, refundSubmit.Status)
 	// poll until status == "refunded" or "partially_refunded":
 	//   client.Payments.Get(ctx, paymentID)
 }

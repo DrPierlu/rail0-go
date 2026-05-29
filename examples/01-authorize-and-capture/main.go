@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("CreatePayment: %v", err)
 	}
 
-	fmt.Printf("Payment ID:  %s\n", createResp.PaymentId)
+	fmt.Printf("Payment ID:  %s\n", createResp.Rail0Id)
 	fmt.Printf("Config hash: %s\n", createResp.ConfigHash)
 
 	// The payer signs the signingPayload using eth_signTypedData_v4 (wallet)
@@ -75,7 +75,7 @@ func main() {
 	//   signature = "0x" + signature
 
 	// Step 2 — Payer submits the 65-byte combined signature
-	sigResp, err := client.Payments.Sign(ctx, createResp.PaymentId, rail0.PayerSignatureRequest{
+	sigResp, err := client.Payments.Sign(ctx, createResp.Rail0Id, rail0.PayerSignatureRequest{
 		Signature: "0x1a2b3c...(130 hex chars from eth_signTypedData_v4)",
 	})
 	if err != nil {
@@ -87,7 +87,7 @@ func main() {
 	// Step 3 — Payee builds and broadcasts the authorize transaction
 	// ----------------------------------------------------------------
 
-	prepAuth, err := client.Payments.Authorize(ctx, createResp.PaymentId)
+	prepAuth, err := client.Payments.Authorize(ctx, createResp.Rail0Id)
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
@@ -103,19 +103,19 @@ func main() {
 
 	// Submit returns 202 immediately with status "submitting".
 	// Poll Payments.Get until status advances to "authorized".
-	authSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
+	authSubmit, err := client.Payments.Submit(ctx, createResp.Rail0Id,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedAuthTx})
 	if err != nil {
 		log.Fatalf("Submit (authorize): %v", err)
 	}
-	fmt.Printf("Authorize enqueued: id=%s status=%s\n", authSubmit.Rail0ID, authSubmit.Status)
-	// poll until status == "authorized": client.Payments.Get(ctx, createResp.PaymentId)
+	fmt.Printf("Authorize enqueued: id=%s status=%s\n", authSubmit.Rail0Id, authSubmit.Status)
+	// poll until status == "authorized": client.Payments.Get(ctx, createResp.Rail0Id)
 
 	// ----------------------------------------------------------------
 	// Step 4a — Payee prepares and submits a capture transaction
 	// ----------------------------------------------------------------
 
-	prepCapture, err := client.Payments.PrepareCapture(ctx, createResp.PaymentId,
+	prepCapture, err := client.Payments.PrepareCapture(ctx, createResp.Rail0Id,
 		rail0.CapturePaymentRequest{Amount: "50000000"})
 	if err != nil {
 		log.Fatalf("PrepareCapture: %v", err)
@@ -127,7 +127,7 @@ func main() {
 	_ = prepCapture
 
 	// Submit returns 202 immediately. Poll until status == "captured" or "partially_captured".
-	captureSubmit, err := client.Payments.Submit(ctx, createResp.PaymentId,
+	captureSubmit, err := client.Payments.Submit(ctx, createResp.Rail0Id,
 		rail0.SubmitTransactionRequest{SignedTransaction: signedCaptureTx})
 	if err != nil {
 		var apiErr *rail0.APIError
@@ -136,21 +136,21 @@ func main() {
 		}
 		log.Fatalf("Submit (capture): %v", err)
 	}
-	fmt.Printf("Capture enqueued: id=%s status=%s\n", captureSubmit.Rail0ID, captureSubmit.Status)
+	fmt.Printf("Capture enqueued: id=%s status=%s\n", captureSubmit.Rail0Id, captureSubmit.Status)
 
 	// ----------------------------------------------------------------
 	// Step 4b — Alternatively: payee voids (order cancelled)
 	// ----------------------------------------------------------------
 
-	// prepVoid, _ := client.Payments.PrepareVoid(ctx, createResp.PaymentId)
+	// prepVoid, _ := client.Payments.PrepareVoid(ctx, createResp.Rail0Id)
 	// signedVoidTx := payeeWallet.SignTransaction(prepVoid.UnsignedTransaction)
-	// client.Payments.Submit(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedVoidTx})
+	// client.Payments.Submit(ctx, createResp.Rail0Id, rail0.SubmitTransactionRequest{SignedTransaction: signedVoidTx})
 
 	// ----------------------------------------------------------------
 	// Step 4c — Release (fallback after authorizationExpiry, permissionless)
 	// ----------------------------------------------------------------
 
-	// prepRelease, _ := client.Payments.PrepareRelease(ctx, createResp.PaymentId, rail0.ReleaseRequest{})
+	// prepRelease, _ := client.Payments.PrepareRelease(ctx, createResp.Rail0Id, rail0.ReleaseRequest{})
 	// signedReleaseTx := payeeWallet.SignTransaction(prepRelease.UnsignedTransaction)
-	// client.Payments.Submit(ctx, createResp.PaymentId, rail0.SubmitTransactionRequest{SignedTransaction: signedReleaseTx})
+	// client.Payments.Submit(ctx, createResp.Rail0Id, rail0.SubmitTransactionRequest{SignedTransaction: signedReleaseTx})
 }

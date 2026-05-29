@@ -7,26 +7,41 @@ type OnChainState struct {
 	RefundableAmount Uint256String `json:"refundableAmount"`
 }
 
+// Transaction is a single on-chain operation attempt associated with a payment.
+type Transaction struct {
+	Operation       string `json:"operation"`
+	Status          string `json:"status"`
+	TransactionHash string `json:"transactionHash"`
+	Amount          string `json:"amount,omitempty"`
+	BlockNumber     *int   `json:"blockNumber,omitempty"`
+}
+
 // PaymentResponse is returned by Payments.Get.
 type PaymentResponse struct {
-	PaymentID           Bytes32       `json:"paymentId"`
-	Status              string        `json:"status"`
-	Mode                string        `json:"mode"`
-	Amount              Uint256String `json:"amount"`
-	Payer               Address       `json:"payer"`
-	Payee               Address       `json:"payee"`
-	Token               Address       `json:"token"`
-	ChainID             int           `json:"chainId"`
-	AuthorizationExpiry int64         `json:"authorizationExpiry"`
-	RefundExpiry        int64         `json:"refundExpiry"`
-	OnChain             *OnChainState `json:"onChain,omitempty"`
+	Rail0Id             Bytes32        `json:"rail0_id"`
+	Status              string         `json:"status"`
+	Mode                string         `json:"mode"`
+	Amount              Uint256String  `json:"amount"`
+	Payer               Address        `json:"payer"`
+	Payee               Address        `json:"payee"`
+	Token               Address        `json:"token"`
+	ChainID             int            `json:"chainId"`
+	AuthorizationExpiry int64          `json:"authorizationExpiry"`
+	RefundExpiry        int64          `json:"refundExpiry"`
+	FeeBps              int            `json:"feeBps"`
+	FeeReceiver         Address        `json:"feeReceiver"`
+	OnChain             *OnChainState  `json:"onChain,omitempty"`
+	// Populated only when status = "pending_signature" so the payer can sign locally.
+	SigningPayload  *SigningPayload `json:"signingPayload,omitempty"`
+	Rail0Contract  Address        `json:"rail0Contract,omitempty"`
+	Transactions   []Transaction  `json:"transactions,omitempty"`
 }
 
 // ReleaseRequest is the optional body for Payments.PrepareRelease.
 // Omit CallerAddress (or leave empty) to build the transaction for the payee;
 // pass the payer address to let the payer submit the release themselves.
 type ReleaseRequest struct {
-	CallerAddress Address `json:"callerAddress,omitempty"`
+	CallerAddress Address `json:"caller_address,omitempty"`
 }
 
 // SubmitTransactionAcceptedResponse is returned by Payments.Submit (HTTP 202).
@@ -34,7 +49,7 @@ type ReleaseRequest struct {
 // to learn whether the transaction was confirmed on-chain.
 // Token and Spender are populated only when the pending operation is "approve".
 type SubmitTransactionAcceptedResponse struct {
-	Rail0ID string `json:"rail0_id"`
+	Rail0Id string `json:"rail0_id"`
 	Status  string `json:"status"` // always "submitting"
 	Token   string `json:"token,omitempty"`
 	Spender string `json:"spender,omitempty"`
