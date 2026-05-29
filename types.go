@@ -58,6 +58,6 @@ type SubmitTransactionAcceptedResponse struct {
 // APIErrorBody is the JSON shape of error responses from the RAIL0 API.
 // Used internally by the HTTP client to parse non-2xx responses.
 type APIErrorBody struct {
-	Code    string `json:"error"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
