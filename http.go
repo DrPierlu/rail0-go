@@ -167,9 +167,9 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 		start := time.Now()
 		resp, err := c.http.Do(req)
 		elapsed := time.Since(start).Milliseconds()
-		cancel()
 
 		if err != nil {
+			cancel()
 			willRetry := attempt < maxAttempts
 			if c.logger != nil {
 				c.logger(LogEntry{
@@ -190,6 +190,7 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		cancel()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			var errBody APIErrorBody
