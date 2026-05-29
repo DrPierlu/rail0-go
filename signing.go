@@ -269,3 +269,27 @@ func SignReceiveWithAuthorization(params SignPaymentParams) (Eip3009Signature, e
 		params.Amount, new(big.Int), big.NewInt(params.Payment.RefundExpiry), params.Nonce)
 	return doSign(params.PrivateKey, digest)
 }
+
+// SignReceiveParams holds the raw fields for a ReceiveWithAuthorization signature,
+// taken directly from the signing payload returned by the API. Use this when
+// the from/to/value fields are already known (e.g. from the signing payload)
+// rather than derived from a PaymentConfig.
+type SignReceiveParams struct {
+	PrivateKey  []byte
+	TokenDomain TokenDomain
+	From        Address
+	To          Address
+	Value       *big.Int
+	ValidAfter  *big.Int
+	ValidBefore *big.Int
+	Nonce       Bytes32
+}
+
+// SignReceiveWithAuthorizationRaw signs a ReceiveWithAuthorization message using
+// the raw fields from the API signing payload, avoiding any field mapping errors.
+func SignReceiveWithAuthorizationRaw(params SignReceiveParams) (Eip3009Signature, error) {
+	digest := buildDigestWithTypehash(receiveTypehash,
+		params.TokenDomain, params.From, params.To,
+		params.Value, params.ValidAfter, params.ValidBefore, params.Nonce)
+	return doSign(params.PrivateKey, digest)
+}
