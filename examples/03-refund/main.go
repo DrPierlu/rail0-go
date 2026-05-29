@@ -1,23 +1,10 @@
-// Refund flow
-//
-// After a capture (or charge) the merchant can refund up to the full
-// captured amount back to the payer, as long as refundExpiry has not
-// passed. The payee must first approve the RAIL0 contract as a spender
-// on the token (so the contract can pull funds back from the payee).
-//
-// On-chain flow:
-//
-//	payee signs approve tx → PrepareApprove + Submit  RAIL0 contract approved as spender
-//	payee signs refund tx  → PrepareRefund + Submit   funds move payee → payer
-//
-// Run:
-//
-//	go run examples/03-refund/main.go
+// Refund flow using EIP-3009 receiveWithAuthorization.
+// No separate ERC-20 approve() needed.
+
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -26,66 +13,45 @@ import (
 
 func main() {
 	ctx := context.Background()
-	client := rail0.NewClient(rail0.ClientOptions{
-		BaseURL: "https://api.rail0.xyz",
-	})
+	client := rail0.NewClient(rail0.ClientOptions{BaseURL: "https://api.rail0.xyz"})
 
-	// Assume the payment was previously created and captured.
-	const paymentID = "0xdeadbeef00000000000000000000000000000000000000000000000000000002"
+	paymentID := "0x..." // a captured payment
 
-	// ----------------------------------------------------------------
-	// Step 1 — Payee approves the RAIL0 contract as token spender
-	// (required before the contract can pull funds back from the payee)
-	// ----------------------------------------------------------------
-
-	prepApprove, err := client.Payments.PrepareApprove(ctx, paymentID, rail0.ApproveRequest{
-		Amount: "115792089237316195423570985008687907853269984665640564039457584007913129639935", // unlimited
+	// ── Phase 1: get the EIP-3009 signing payload ──────────────────────────────
+	phase1, err := client.Payments.RefundPayload(ctx, paymentID, rail0.RefundPayloadRequest{
+		Amount: "50000000",
 	})
 	if err != nil {
-		log.Fatalf("PrepareApprove: %v", err)
+		log.Fatalf("RefundPayload phase 1: %v", err)
 	}
+	// phase1.SigningPayload contains the EIP-712 typed-data the payee must sign
+	// using eth_signTypedData_v4 or rail0.SignRefund (when available).
+	fmt.Printf("Signing payload nonce: %s\n", phase1.SigningPayload.Message.Nonce)
 
-	// Payee signs prepApprove.UnsignedTransaction offline, then submits:
-	//   signedApproveTx := payeeWallet.SignTransaction(prepApprove.UnsignedTransaction)
-	signedApproveTx := "0x02f8..." // placeholder
-	_ = prepApprove
+	// Payee signs the payload → v, r, s
+	v, r, s := 27, "0xabc...", "0xdef..."
 
-	// Submit returns 202 immediately. Poll until status shows approve confirmed.
-	approveSubmit, err := client.Payments.Submit(ctx, paymentID,
-		rail0.SubmitTransactionRequest{SignedTransaction: signedApproveTx})
-	if err != nil {
-		log.Fatalf("Submit (approve): %v", err)
-	}
-	fmt.Printf("Approve enqueued: id=%s status=%s\n", approveSubmit.Rail0Id, approveSubmit.Status)
-
-	// ----------------------------------------------------------------
-	// Step 2 — Payee prepares and submits a refund transaction
-	// ----------------------------------------------------------------
-
-	prepRefund, err := client.Payments.PrepareRefund(ctx, paymentID, rail0.RefundPaymentRequest{
-		Amount: "50000000", // partial or full refund
+	// ── Phase 2: build the unsigned refund() tx with EIP-3009 sig embedded ────
+	phase2, err := client.Payments.RefundPayload(ctx, paymentID, rail0.RefundPayloadRequest{
+		Amount: "50000000",
+		V:      v,
+		R:      r,
+		S:      s,
 	})
 	if err != nil {
-		log.Fatalf("PrepareRefund: %v", err)
+		log.Fatalf("RefundPayload phase 2: %v", err)
 	}
+	fmt.Printf("Unsigned refund tx: %s\n", phase2.UnsignedTransaction)
 
-	// Payee signs prepRefund.UnsignedTransaction offline, then submits:
-	//   signedRefundTx := payeeWallet.SignTransaction(prepRefund.UnsignedTransaction)
-	signedRefundTx := "0x02f8..." // placeholder
-	_ = prepRefund
+	// Payee signs the EIP-1559 tx → SIGNED_TX
+	signedTx := "0x02f8..." // placeholder
 
-	// Submit returns 202 immediately. Poll until status == "refunded" or "partially_refunded".
-	refundSubmit, err := client.Payments.Submit(ctx, paymentID,
-		rail0.SubmitTransactionRequest{SignedTransaction: signedRefundTx})
+	// ── Submit ────────────────────────────────────────────────────────────────
+	refundSubmit, err := client.Payments.Refund(ctx, paymentID,
+		rail0.SubmitTransactionRequest{SignedTransaction: signedTx})
 	if err != nil {
-		var apiErr *rail0.APIError
-		if errors.As(err, &apiErr) {
-			log.Fatalf("Submit (refund) failed [%s]: %s", apiErr.Code, apiErr.Message)
-		}
-		log.Fatalf("Submit (refund): %v", err)
+		log.Fatalf("Refund: %v", err)
 	}
-
 	fmt.Printf("Refund enqueued: id=%s status=%s\n", refundSubmit.Rail0Id, refundSubmit.Status)
-	// poll until status == "refunded" or "partially_refunded":
-	//   client.Payments.Get(ctx, paymentID)
+	// poll until status == "refunded": client.Payments.Get(ctx, paymentID)
 }

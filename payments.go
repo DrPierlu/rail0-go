@@ -46,83 +46,132 @@ func (s *PaymentsService) Sign(ctx context.Context, paymentID Bytes32, params Pa
 	return &out, nil
 }
 
-// Authorize relays the stored EIP-3009 signature to the RAIL0 authorize() function. Called by the payee.
-func (s *PaymentsService) Authorize(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
+// ── Authorize ──────────────────────────────────────────────────────────────────
+
+// AuthorizePayload builds the unsigned authorize() transaction. Creates a Transaction
+// row in pending status. Sign the returned UnsignedTransaction and call Authorize.
+func (s *PaymentsService) AuthorizePayload(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize", nil, &out); err != nil {
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize/payload", nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// Charge builds the unsigned charge() transaction. The payer signature must have been
-// submitted first via Sign. Charge is a one-shot alternative to Authorize+Capture:
-// funds are transferred directly to the payee without an escrow window.
-// Sign the returned UnsignedTransaction and submit it with Submit.
-func (s *PaymentsService) Charge(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
-	var out PrepareTransactionResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge", nil, &out); err != nil {
+// Authorize submits the signed authorize transaction for asynchronous broadcast.
+// Returns 202 immediately; poll Get until the payment reaches "authorized".
+func (s *PaymentsService) Authorize(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/authorize", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// PrepareCapture builds the unsigned capture() transaction. Called by the payee.
-func (s *PaymentsService) PrepareCapture(ctx context.Context, paymentID Bytes32, params CapturePaymentRequest) (*PrepareTransactionResponse, error) {
+// ── Charge ─────────────────────────────────────────────────────────────────────
+
+// ChargePayload builds the unsigned charge() transaction (one-shot authorize+capture).
+// Creates a Transaction row in pending status.
+func (s *PaymentsService) ChargePayload(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge/payload", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Charge submits the signed charge transaction. Poll Get until "charged".
+func (s *PaymentsService) Charge(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/charge", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ── Capture ────────────────────────────────────────────────────────────────────
+
+// CapturePayload builds the unsigned capture() transaction.
+// Partial captures are supported: amount may be less than capturableAmount.
+func (s *PaymentsService) CapturePayload(ctx context.Context, paymentID Bytes32, params CapturePaymentRequest) (*PrepareTransactionResponse, error) {
+	var out PrepareTransactionResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/capture/payload", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Capture submits the signed capture transaction. Poll Get until "captured".
+func (s *PaymentsService) Capture(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/capture", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// PrepareVoid builds the unsigned void() transaction. Called by the payee.
-func (s *PaymentsService) PrepareVoid(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
+// ── Void ───────────────────────────────────────────────────────────────────────
+
+// VoidPayload builds the unsigned void() transaction.
+func (s *PaymentsService) VoidPayload(ctx context.Context, paymentID Bytes32) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/void", nil, &out); err != nil {
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/void/payload", nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// PrepareRelease builds the unsigned release() transaction. Pass CallerAddress to build the tx
-// for the buyer; omit (or pass empty) to build it for the payee.
-// Release can only be called after AuthorizationExpiry has passed on-chain.
-func (s *PaymentsService) PrepareRelease(ctx context.Context, paymentID Bytes32, params ReleaseRequest) (*PrepareTransactionResponse, error) {
+// Void submits the signed void transaction. Poll Get until "voided".
+func (s *PaymentsService) Void(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/void", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ── Release ────────────────────────────────────────────────────────────────────
+
+// ReleasePayload builds the unsigned release() transaction.
+// Pass CallerAddress to build for the payer; omit for the payee.
+func (s *PaymentsService) ReleasePayload(ctx context.Context, paymentID Bytes32, params ReleaseRequest) (*PrepareTransactionResponse, error) {
 	var out PrepareTransactionResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/release/payload", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Release submits the signed release transaction. Poll Get until "released".
+func (s *PaymentsService) Release(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+	var out SubmitTransactionAcceptedResponse
 	if err := s.http.post(ctx, "/payments/"+paymentID+"/release", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// PrepareApprove builds the unsigned ERC-20 approve() transaction needed before a refund. Called by the payee.
-func (s *PaymentsService) PrepareApprove(ctx context.Context, paymentID Bytes32, params ApproveRequest) (*PrepareTransactionResponse, error) {
-	var out PrepareTransactionResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/approve", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
+// ── Refund (EIP-3009) ─────────────────────────────────────────────────────────
 
-// PrepareRefund builds the unsigned refund() transaction. Called by the payee.
-func (s *PaymentsService) PrepareRefund(ctx context.Context, paymentID Bytes32, params RefundPaymentRequest) (*PrepareTransactionResponse, error) {
-	var out PrepareTransactionResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/refund", params, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// Submit enqueues a signed transaction for asynchronous broadcast.
-// The operation is inferred from pending_operation set by the preceding prepare step
-// (Authorize, Charge, PrepareCapture, PrepareVoid, PrepareRelease, PrepareApprove, PrepareRefund).
+// RefundPayload is a two-phase endpoint.
 //
-// Returns HTTP 202 immediately with status "submitting". Poll Payments.Get until
-// status leaves "submitting" to learn the final on-chain outcome.
-func (s *PaymentsService) Submit(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
+// Phase 1 — params.V/R/S empty: returns the EIP-3009 signing payload the payee
+// must sign off-chain. No unsigned transaction is returned yet.
+//
+// Phase 2 — params.V/R/S set: builds the unsigned refund() transaction with the
+// EIP-3009 signature embedded in calldata and returns it in UnsignedTransaction.
+func (s *PaymentsService) RefundPayload(ctx context.Context, paymentID Bytes32, params RefundPayloadRequest) (*RefundPayloadResponse, error) {
+	var out RefundPayloadResponse
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/refund/payload", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Refund submits the signed refund transaction. Poll Get until "refunded".
+func (s *PaymentsService) Refund(ctx context.Context, paymentID Bytes32, params SubmitTransactionRequest) (*SubmitTransactionAcceptedResponse, error) {
 	var out SubmitTransactionAcceptedResponse
-	if err := s.http.post(ctx, "/payments/"+paymentID+"/transactions/submit", params, &out); err != nil {
+	if err := s.http.post(ctx, "/payments/"+paymentID+"/refund", params, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

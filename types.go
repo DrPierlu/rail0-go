@@ -44,15 +44,30 @@ type ReleaseRequest struct {
 	CallerAddress Address `json:"caller_address,omitempty"`
 }
 
-// SubmitTransactionAcceptedResponse is returned by Payments.Submit (HTTP 202).
-// The submission is asynchronous — poll Payments.Get until status leaves "submitting"
-// to learn whether the transaction was confirmed on-chain.
-// Token and Spender are populated only when the pending operation is "approve".
+// SubmitTransactionAcceptedResponse is returned by the per-operation submit
+// endpoints (Authorize, Charge, Capture, Void, Release, Refund). HTTP 202.
+// Poll Payments.Get until status advances to the expected terminal state.
 type SubmitTransactionAcceptedResponse struct {
 	Rail0Id string `json:"rail0_id"`
-	Status  string `json:"status"` // always "submitting"
-	Token   string `json:"token,omitempty"`
-	Spender string `json:"spender,omitempty"`
+	Status  string `json:"status"`
+}
+
+// RefundPayloadRequest is the body for Payments.RefundPayload.
+// Phase 1 (get signing payload): set only Amount.
+// Phase 2 (get unsigned tx):     set Amount + V, R, S from the signed EIP-3009 payload.
+type RefundPayloadRequest struct {
+	Amount string `json:"amount"`
+	V      int    `json:"v,omitempty"`
+	R      string `json:"r,omitempty"`
+	S      string `json:"s,omitempty"`
+}
+
+// RefundPayloadResponse is returned by Payments.RefundPayload.
+// Phase 1: SigningPayload is populated, UnsignedTransaction is empty.
+// Phase 2: UnsignedTransaction is populated (EIP-3009 sig embedded in calldata).
+type RefundPayloadResponse struct {
+	SigningPayload       *SigningPayload `json:"signing_payload,omitempty"`
+	UnsignedTransaction string         `json:"unsigned_transaction,omitempty"`
 }
 
 // APIErrorBody is the JSON shape of error responses from the RAIL0 API.
