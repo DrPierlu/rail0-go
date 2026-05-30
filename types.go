@@ -25,15 +25,15 @@ type PaymentResponse struct {
 	Payer               Address        `json:"payer"`
 	Payee               Address        `json:"payee"`
 	Token               Address        `json:"token"`
-	ChainID             int            `json:"chainId"`
-	AuthorizationExpiry int64          `json:"authorizationExpiry"`
-	RefundExpiry        int64          `json:"refundExpiry"`
-	FeeBps              int            `json:"feeBps"`
-	FeeReceiver         Address        `json:"feeReceiver"`
-	OnChain             *OnChainState  `json:"onChain,omitempty"`
+	ChainID             int            `json:"chain_id"`
+	AuthorizationExpiry int64          `json:"authorization_expiry"`
+	RefundExpiry        int64          `json:"refund_expiry"`
+	FeeBps              int            `json:"fee_bps"`
+	FeeReceiver         Address        `json:"fee_receiver"`
+	OnChain             *OnChainState  `json:"on_chain,omitempty"`
 	// Populated only when status = "pending_signature" so the payer can sign locally.
-	SigningPayload  *SigningPayload `json:"signingPayload,omitempty"`
-	Rail0Contract  Address        `json:"rail0Contract,omitempty"`
+	SigningPayload  *SigningPayload `json:"signing_payload,omitempty"`
+	Rail0Contract  Address        `json:"rail0_contract,omitempty"`
 	Transactions   []Transaction  `json:"transactions,omitempty"`
 }
 
