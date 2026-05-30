@@ -36,19 +36,18 @@ func newTestServer(t *testing.T) *rail0.Client {
 	}
 
 	createPaymentFixture := map[string]any{
-		"paymentId":  "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"configHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		"rail0_id":    "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"config_hash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		"payment": map[string]any{
 			"payer": "0xBuyerAddress0000000000000000000000000000",
 			"payee": "0xMerchantAddress00000000000000000000000000",
 			"token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-			"maxAmount": "100000000", "authorizationExpiry": 9999999999, "refundExpiry": 9999999999,
-			"feeBps": 0, "feeReceiver": "0x0000000000000000000000000000000000000000",
+			"amount": "100000000", "authorization_expiry": 9999999999, "refund_expiry": 9999999999,
+			"fee_bps": 0, "fee_receiver": "0x0000000000000000000000000000000000000000",
 		},
-		"amount":  "50000000",
-		"chainId": 8453,
-		"rail0Contract": "0x4444444444444444444444444444444444444444",
-		"signingPayload": map[string]any{
+		"chain_id":      8453,
+		"rail0_contract": "0x4444444444444444444444444444444444444444",
+		"signing_payload": map[string]any{
 			"domain": map[string]any{"name": "USD Coin", "version": "2", "chainId": 8453, "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
 			"types": map[string]any{"TransferWithAuthorization": []any{}},
 			"primaryType": "TransferWithAuthorization",
@@ -66,33 +65,23 @@ func newTestServer(t *testing.T) *rail0.Client {
 		"status":    "signature_stored",
 	}
 
-	authorizeFixture := map[string]any{
-		"paymentId":           "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"transactionHash":     "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"capturableAmount":    "50000000",
-		"authorizationExpiry": 9999999999,
-	}
-
-	chargeFixture := map[string]any{
-		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"chargedAmount":    "50000000",
-		"feeAmount":        "0",
-		"refundableAmount": "50000000",
+	submitFixture := map[string]any{
+		"rail0_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+		"status":   "submitting",
 	}
 
 	prepareFixture := map[string]any{
-		"unsignedTransaction":  "0x02f8beef",
+		"unsigned_transaction": "0x02f8beef",
 		"to":                   "0x4444444444444444444444444444444444444444",
 		"data":                 "0x",
-		"chainId":              8453,
+		"chain_id":             8453,
 		"nonce":                1,
-		"maxFeePerGas":         "1000000000",
-		"maxPriorityFeePerGas": "1000000000",
-		"gasLimit":             "100000",
+		"maxFeePerGas":         1000000000,
+		"maxPriorityFeePerGas": 1000000000,
+		"gasLimit":             100000,
 	}
 
-	captureSubmitFixture := map[string]any{
+	_ = map[string]any{
 		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
 		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		"capturedAmount":   "50000000",
@@ -100,31 +89,7 @@ func newTestServer(t *testing.T) *rail0.Client {
 		"refundableAmount": "50000000",
 	}
 
-	voidSubmitFixture := map[string]any{
-		"paymentId":       "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"releasedAmount":  "50000000",
-	}
-
-	releaseFixture := map[string]any{
-		"paymentId":       "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"releasedAmount":  "50000000",
-	}
-
-	approveSubmitFixture := map[string]any{
-		"transactionHash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"token":           "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-		"spender":         "0x4444444444444444444444444444444444444444",
-		"amount":          "1000000",
-	}
-
-	refundSubmitFixture := map[string]any{
-		"paymentId":        "0x1111111111111111111111111111111111111111111111111111111111111111",
-		"transactionHash":  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"refundedAmount":   "10000000",
-		"refundableAmount": "40000000",
-	}
+	_ = submitFixture // used inline in switch
 
 	mux := http.NewServeMux()
 
@@ -155,28 +120,11 @@ func newTestServer(t *testing.T) *rail0.Client {
 		}
 		action := strings.Join(parts[1:], "/")
 		switch action {
-		case "authorize":
-			respond(w, authorizeFixture)
-		case "charge":
-			respond(w, chargeFixture)
-		case "capture":
+		case "authorize/payload", "charge/payload", "capture/payload", "void/payload", "release/payload", "refund/payload":
 			respond(w, prepareFixture)
-		case "capture/submit":
-			respond(w, captureSubmitFixture)
-		case "void":
-			respond(w, prepareFixture)
-		case "void/submit":
-			respond(w, voidSubmitFixture)
-		case "release":
-			respond(w, releaseFixture)
-		case "approve":
-			respond(w, prepareFixture)
-		case "approve/submit":
-			respond(w, approveSubmitFixture)
-		case "refund":
-			respond(w, prepareFixture)
-		case "refund/submit":
-			respond(w, refundSubmitFixture)
+		case "authorize", "charge", "capture", "void", "release", "refund":
+			w.WriteHeader(http.StatusAccepted)
+			respond(w, submitFixture)
 		default:
 			http.NotFound(w, r)
 		}
@@ -193,22 +141,14 @@ func newTestServer(t *testing.T) *rail0.Client {
 
 const integrationPaymentID = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
-var integrationPayment = rail0.PaymentConfig{
-	Payer:               "0xBuyerAddress0000000000000000000000000000",
-	Payee:               "0xMerchantAddress00000000000000000000000000",
-	Token:               "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-	MaxAmount:           "100000000",
-	AuthorizationExpiry: 9999999999,
-	RefundExpiry:        9999999999,
-	FeeBps:              0,
-	FeeReceiver:         "0x0000000000000000000000000000000000000000",
+var integrationPayment = rail0.PaymentInput{
+	Payer:  "0xBuyerAddress0000000000000000000000000000",
+	Payee:  "0xMerchantAddress00000000000000000000000000",
+	Token:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+	Amount: "100000000",
 }
 
-var integrationSig = struct{ V int; R, S rail0.Bytes32 }{
-	V: 27,
-	R: "0x1111111111111111111111111111111111111111111111111111111111111111",
-	S: "0x2222222222222222222222222222222222222222222222222222222222222222",
-}
+const integrationSignature = "0xabababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab"
 
 // ================================================================
 //  Payments
@@ -218,15 +158,14 @@ func TestIntegration_CreatePayment(t *testing.T) {
 	client := newTestServer(t)
 	res, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
 		Payment: integrationPayment,
-		Amount:  "50000000",
-		ChainID: 8453,
+		ChainId: 8453,
 		Mode:    "authorize",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.PaymentID) {
-		t.Errorf("paymentId format invalid: %s", res.PaymentID)
+	if !bytes32RE.MatchString(res.Rail0Id) {
+		t.Errorf("rail0_id format invalid: %s", res.Rail0Id)
 	}
 	if !bytes32RE.MatchString(res.ConfigHash) {
 		t.Errorf("configHash format invalid: %s", res.ConfigHash)
@@ -236,9 +175,7 @@ func TestIntegration_CreatePayment(t *testing.T) {
 func TestIntegration_Sign(t *testing.T) {
 	client := newTestServer(t)
 	res, err := client.Payments.Sign(context.Background(), integrationPaymentID, rail0.PayerSignatureRequest{
-		V: integrationSig.V,
-		R: integrationSig.R,
-		S: integrationSig.S,
+		Signature: integrationSignature,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -248,37 +185,57 @@ func TestIntegration_Sign(t *testing.T) {
 	}
 }
 
-func TestIntegration_Authorize(t *testing.T) {
+func TestIntegration_AuthorizePayload(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Authorize(context.Background(), integrationPaymentID)
+	res, err := client.Payments.AuthorizePayload(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
-	if res.CapturableAmount == "" {
-		t.Error("capturableAmount should not be empty")
+}
+
+func TestIntegration_Authorize(t *testing.T) {
+	client := newTestServer(t)
+	res, err := client.Payments.Authorize(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
+	}
+}
+
+func TestIntegration_ChargePayload(t *testing.T) {
+	client := newTestServer(t)
+	res, err := client.Payments.ChargePayload(context.Background(), integrationPaymentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
 }
 
 func TestIntegration_Charge(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Charge(context.Background(), integrationPaymentID)
+	res, err := client.Payments.Charge(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+		SignedTransaction: "0x02f8...",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
-	}
-	if res.ChargedAmount == "" {
-		t.Error("chargedAmount should not be empty")
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
 	}
 }
 
-func TestIntegration_PrepareCapture(t *testing.T) {
+func TestIntegration_CapturePayload(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.PrepareCapture(context.Background(), integrationPaymentID, rail0.CapturePaymentRequest{
+	res, err := client.Payments.CapturePayload(context.Background(), integrationPaymentID, rail0.CapturePaymentRequest{
 		Amount: "50000000",
 	})
 	if err != nil {
@@ -289,22 +246,22 @@ func TestIntegration_PrepareCapture(t *testing.T) {
 	}
 }
 
-func TestIntegration_SubmitCapture(t *testing.T) {
+func TestIntegration_Capture(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.SubmitCapture(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+	res, err := client.Payments.Capture(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
 		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
 	}
 }
 
-func TestIntegration_PrepareVoid(t *testing.T) {
+func TestIntegration_VoidPayload(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.PrepareVoid(context.Background(), integrationPaymentID)
+	res, err := client.Payments.VoidPayload(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,59 +270,46 @@ func TestIntegration_PrepareVoid(t *testing.T) {
 	}
 }
 
-func TestIntegration_SubmitVoid(t *testing.T) {
+func TestIntegration_Void(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.SubmitVoid(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+	res, err := client.Payments.Void(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
 		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
+	}
+}
+
+func TestIntegration_ReleasePayload(t *testing.T) {
+	client := newTestServer(t)
+	res, err := client.Payments.ReleasePayload(context.Background(), integrationPaymentID, rail0.ReleaseRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.UnsignedTransaction == "" {
+		t.Error("unsignedTransaction should not be empty")
 	}
 }
 
 func TestIntegration_Release(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.Release(context.Background(), integrationPaymentID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
-	}
-}
-
-func TestIntegration_PrepareApprove(t *testing.T) {
-	client := newTestServer(t)
-	res, err := client.Payments.PrepareApprove(context.Background(), integrationPaymentID, rail0.ApproveRequest{
-		Amount: "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.UnsignedTransaction == "" {
-		t.Error("unsignedTransaction should not be empty")
-	}
-}
-
-func TestIntegration_SubmitApprove(t *testing.T) {
-	client := newTestServer(t)
-	res, err := client.Payments.SubmitApprove(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+	res, err := client.Payments.Release(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
 		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
 	}
 }
 
-func TestIntegration_PrepareRefund(t *testing.T) {
+func TestIntegration_RefundPayload(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.PrepareRefund(context.Background(), integrationPaymentID, rail0.RefundPaymentRequest{
+	res, err := client.Payments.RefundPayload(context.Background(), integrationPaymentID, rail0.RefundPayloadRequest{
 		Amount: "10000000",
 	})
 	if err != nil {
@@ -376,18 +320,15 @@ func TestIntegration_PrepareRefund(t *testing.T) {
 	}
 }
 
-func TestIntegration_SubmitRefund(t *testing.T) {
+func TestIntegration_Refund(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.SubmitRefund(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
+	res, err := client.Payments.Refund(context.Background(), integrationPaymentID, rail0.SubmitTransactionRequest{
 		SignedTransaction: "0x02f8...",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes32RE.MatchString(res.TransactionHash) {
-		t.Errorf("transactionHash format invalid: %s", res.TransactionHash)
-	}
-	if res.RefundedAmount == "" {
-		t.Error("refundedAmount should not be empty")
+	if res.Status != "submitting" {
+		t.Errorf("status: got %s, want submitting", res.Status)
 	}
 }

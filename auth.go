@@ -23,7 +23,6 @@ type AuthRequest struct {
 type AuthResponse struct {
 	Token     string `json:"token"`
 	Address   string `json:"address"`
-	ChainID   int    `json:"chain_id"`
 	AccountID string `json:"account_id"`
 	ExpiresAt string `json:"expires_at"`
 }

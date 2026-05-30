@@ -35,7 +35,7 @@ var testPayment = rail0.PaymentConfig{
 	Payer:               payerAddress,
 	Payee:               "0x2222222222222222222222222222222222222222",
 	Token:               tokenAddress,
-	MaxAmount:           "100000000",
+	Amount:              "100000000",
 	AuthorizationExpiry: 9999999999,
 	RefundExpiry:        9999999999 + 60*60*24*7,
 	FeeBps:              0,

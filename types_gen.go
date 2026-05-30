@@ -15,24 +15,6 @@ type Bytes32 = string
 // Uint256String is a type alias for string. Non-negative integer encoded as a decimal string to avoid JSON numeric precision loss.
 type Uint256String = string
 
-// ApproveRequest Amount to approve on the token contract. Setting this to the maximum expected refund (or `type(uint256).max` for unlimited) avoids repeated approvals.
-type ApproveRequest struct {
-	// Allowance to grant the RAIL0 contract (in token base units). Use '115792089237316195423570985008687907853269984665640564039457584007913129639935' for unlimited approval.
-	Amount Uint256String `json:"amount"`
-}
-
-// ApproveResponse
-type ApproveResponse struct {
-	// Approved allowance amount.
-	Amount Uint256String `json:"amount"`
-	// RAIL0 contract address that was approved as spender.
-	Spender Address `json:"spender"`
-	// Token contract on which the approval was set.
-	Token Address `json:"token"`
-	// On-chain transaction hash of the `approve()` call.
-	TransactionHash Bytes32 `json:"transactionHash"`
-}
-
 // AuthorizePaymentResponse
 type AuthorizePaymentResponse struct {
 	// Amount now held in escrow and available for capture (equals the authorized amount).
