@@ -31,7 +31,7 @@ type PaymentResponse struct {
 	FeeBps              int            `json:"fee_bps"`
 	FeeReceiver         Address        `json:"fee_receiver"`
 	OnChain             *OnChainState  `json:"on_chain,omitempty"`
-	// Populated only when status = "pending_signature" so the payer can sign locally.
+	// Populated only when status = "unsigned" so the payer can sign locally.
 	SigningPayload  *SigningPayload `json:"signing_payload,omitempty"`
 	Rail0Contract  Address        `json:"rail0_contract,omitempty"`
 	Transactions   []Transaction  `json:"transactions,omitempty"`
