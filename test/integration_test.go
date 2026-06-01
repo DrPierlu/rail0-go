@@ -47,7 +47,7 @@ func newTestServer(t *testing.T) *rail0.Client {
 		},
 		"chain_id":      8453,
 		"rail0_contract": "0x4444444444444444444444444444444444444444",
-		"signing_payload": map[string]any{
+		"signing_prepare": map[string]any{
 			"domain": map[string]any{"name": "USD Coin", "version": "2", "chainId": 8453, "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
 			"types": map[string]any{"TransferWithAuthorization": []any{}},
 			"primaryType": "TransferWithAuthorization",
@@ -120,7 +120,7 @@ func newTestServer(t *testing.T) *rail0.Client {
 		}
 		action := strings.Join(parts[1:], "/")
 		switch action {
-		case "authorize/payload", "charge/payload", "capture/payload", "void/payload", "release/payload", "refund/payload":
+		case "authorize/prepare", "charge/prepare", "capture/prepare", "void/prepare", "release/prepare", "refund/prepare":
 			respond(w, prepareFixture)
 		case "authorize", "charge", "capture", "void", "release", "refund":
 			w.WriteHeader(http.StatusAccepted)
@@ -185,9 +185,9 @@ func TestIntegration_Sign(t *testing.T) {
 	}
 }
 
-func TestIntegration_AuthorizePayload(t *testing.T) {
+func TestIntegration_AuthorizePrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.AuthorizePayload(context.Background(), integrationPaymentID)
+	res, err := client.Payments.AuthorizePrepare(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,9 +209,9 @@ func TestIntegration_Authorize(t *testing.T) {
 	}
 }
 
-func TestIntegration_ChargePayload(t *testing.T) {
+func TestIntegration_ChargePrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.ChargePayload(context.Background(), integrationPaymentID)
+	res, err := client.Payments.ChargePrepare(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,9 +233,9 @@ func TestIntegration_Charge(t *testing.T) {
 	}
 }
 
-func TestIntegration_CapturePayload(t *testing.T) {
+func TestIntegration_CapturePrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.CapturePayload(context.Background(), integrationPaymentID, rail0.CapturePaymentRequest{
+	res, err := client.Payments.CapturePrepare(context.Background(), integrationPaymentID, rail0.CapturePaymentRequest{
 		Amount: "50000000",
 	})
 	if err != nil {
@@ -259,9 +259,9 @@ func TestIntegration_Capture(t *testing.T) {
 	}
 }
 
-func TestIntegration_VoidPayload(t *testing.T) {
+func TestIntegration_VoidPrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.VoidPayload(context.Background(), integrationPaymentID)
+	res, err := client.Payments.VoidPrepare(context.Background(), integrationPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,9 +283,9 @@ func TestIntegration_Void(t *testing.T) {
 	}
 }
 
-func TestIntegration_ReleasePayload(t *testing.T) {
+func TestIntegration_ReleasePrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.ReleasePayload(context.Background(), integrationPaymentID, rail0.ReleaseRequest{})
+	res, err := client.Payments.ReleasePrepare(context.Background(), integrationPaymentID, rail0.ReleaseRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,9 +307,9 @@ func TestIntegration_Release(t *testing.T) {
 	}
 }
 
-func TestIntegration_RefundPayload(t *testing.T) {
+func TestIntegration_RefundPrepare(t *testing.T) {
 	client := newTestServer(t)
-	res, err := client.Payments.RefundPayload(context.Background(), integrationPaymentID, rail0.RefundPayloadRequest{
+	res, err := client.Payments.RefundPrepare(context.Background(), integrationPaymentID, rail0.RefundPayloadRequest{
 		Amount: "10000000",
 	})
 	if err != nil {

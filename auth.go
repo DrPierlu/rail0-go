@@ -36,10 +36,10 @@ type AuthResponse struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
-// GetNonce requests a single-use SIWE nonce from the API.
+// GetNonce issues a single-use SIWE nonce from the API (POST /nonces).
 func (s *AuthService) GetNonce(ctx context.Context) (*NonceResponse, error) {
 	var out NonceResponse
-	if err := s.http.get(ctx, "/auth/nonce", &out); err != nil {
+	if err := s.http.post(ctx, "/nonces", struct{}{}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

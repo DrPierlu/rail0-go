@@ -35,7 +35,7 @@ func main() {
 	})
 
 	// Payee gets the unsigned charge tx
-	chargePayload, err := client.Payments.ChargePayload(ctx, createResp.Rail0Id)
+	chargePayload, err := client.Payments.ChargePrepare(ctx, createResp.Rail0Id)
 	if err != nil {
 		log.Fatalf("ChargePayload: %v", err)
 	}

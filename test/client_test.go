@@ -115,7 +115,7 @@ var mockCreatePaymentResp = map[string]any{
 		"fee_receiver":         "0x0000000000000000000000000000000000000000",
 	},
 	"chain_id": 8453,
-	"signing_payload": map[string]any{
+	"signing_prepare": map[string]any{
 		"primaryType": "TransferWithAuthorization",
 		"domain":      map[string]any{},
 		"types":       map[string]any{},
@@ -311,7 +311,7 @@ func TestAuthorizePayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.AuthorizePayload(context.Background(), mockPaymentID)
+	_, err := client.Payments.AuthorizePrepare(context.Background(), mockPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestAuthorizePayload_PostsToCorrectURL(t *testing.T) {
 	if req.Method != http.MethodPost {
 		t.Errorf("method: got %s, want POST", req.Method)
 	}
-	wantPath := "/payments/" + mockPaymentID + "/authorize/payload"
+	wantPath := "/payments/" + mockPaymentID + "/authorize/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
@@ -373,7 +373,7 @@ func TestChargePayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.ChargePayload(context.Background(), mockPaymentID)
+	_, err := client.Payments.ChargePrepare(context.Background(), mockPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestChargePayload_PostsToCorrectURL(t *testing.T) {
 	if req.Method != http.MethodPost {
 		t.Errorf("method: got %s, want POST", req.Method)
 	}
-	wantPath := "/payments/" + mockPaymentID + "/charge/payload"
+	wantPath := "/payments/" + mockPaymentID + "/charge/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
@@ -419,7 +419,7 @@ func TestCapturePayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.CapturePayload(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{
+	_, err := client.Payments.CapturePrepare(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{
 		Amount: "1000000",
 	})
 	if err != nil {
@@ -430,7 +430,7 @@ func TestCapturePayload_PostsToCorrectURL(t *testing.T) {
 	if req.Method != http.MethodPost {
 		t.Errorf("method: got %s, want POST", req.Method)
 	}
-	wantPath := "/payments/" + mockPaymentID + "/capture/payload"
+	wantPath := "/payments/" + mockPaymentID + "/capture/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
@@ -441,7 +441,7 @@ func TestCapturePayload_ReturnsPrepareTransactionResponse(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	res, err := client.Payments.CapturePayload(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{Amount: "1000000"})
+	res, err := client.Payments.CapturePrepare(context.Background(), mockPaymentID, rail0.CapturePaymentRequest{Amount: "1000000"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,13 +482,13 @@ func TestVoidPayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.VoidPayload(context.Background(), mockPaymentID)
+	_, err := client.Payments.VoidPrepare(context.Background(), mockPaymentID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	req := mt.recorded[0]
-	wantPath := "/payments/" + mockPaymentID + "/void/payload"
+	wantPath := "/payments/" + mockPaymentID + "/void/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
@@ -522,7 +522,7 @@ func TestReleasePayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.ReleasePayload(context.Background(), mockPaymentID, rail0.ReleaseRequest{})
+	_, err := client.Payments.ReleasePrepare(context.Background(), mockPaymentID, rail0.ReleaseRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,7 +531,7 @@ func TestReleasePayload_PostsToCorrectURL(t *testing.T) {
 	if req.Method != http.MethodPost {
 		t.Errorf("method: got %s, want POST", req.Method)
 	}
-	wantPath := "/payments/" + mockPaymentID + "/release/payload"
+	wantPath := "/payments/" + mockPaymentID + "/release/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
@@ -568,7 +568,7 @@ func TestRefundPayload_PostsToCorrectURL(t *testing.T) {
 	mt.push(jsonResp(200, mockPrepareResp))
 	client := newMockClient(t, mt)
 
-	_, err := client.Payments.RefundPayload(context.Background(), mockPaymentID, rail0.RefundPayloadRequest{
+	_, err := client.Payments.RefundPrepare(context.Background(), mockPaymentID, rail0.RefundPayloadRequest{
 		Amount: "500000",
 	})
 	if err != nil {
@@ -576,7 +576,7 @@ func TestRefundPayload_PostsToCorrectURL(t *testing.T) {
 	}
 
 	req := mt.recorded[0]
-	wantPath := "/payments/" + mockPaymentID + "/refund/payload"
+	wantPath := "/payments/" + mockPaymentID + "/refund/prepare"
 	if req.URL.Path != wantPath {
 		t.Errorf("path: got %s, want %s", req.URL.Path, wantPath)
 	}
