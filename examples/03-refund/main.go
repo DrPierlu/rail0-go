@@ -18,7 +18,7 @@ func main() {
 	paymentID := "0x..." // a captured payment
 
 	// ── Phase 1: get the EIP-3009 signing payload ──────────────────────────────
-	phase1, err := client.Payments.RefundPayload(ctx, paymentID, rail0.RefundPayloadRequest{
+	phase1, err := client.Payments.RefundPrepare(ctx, paymentID, rail0.RefundPayloadRequest{
 		Amount: "50000000",
 	})
 	if err != nil {
@@ -32,7 +32,7 @@ func main() {
 	v, r, s := 27, "0xabc...", "0xdef..."
 
 	// ── Phase 2: build the unsigned refund() tx with EIP-3009 sig embedded ────
-	phase2, err := client.Payments.RefundPayload(ctx, paymentID, rail0.RefundPayloadRequest{
+	phase2, err := client.Payments.RefundPrepare(ctx, paymentID, rail0.RefundPayloadRequest{
 		Amount: "50000000",
 		V:      v,
 		R:      r,

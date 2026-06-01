@@ -3,11 +3,11 @@
 // On-chain flow:
 //   payer  signs EIP-3009         → off-chain
 //   payee  PUT /sign              → stores signature server-side
-//   payee  POST /authorize/payload → get unsigned tx
+//   payee  POST /authorize/prepare → get unsigned tx
 //   payee  signs tx off-chain     → signed tx
 //   payee  POST /authorize        → async broadcast (HTTP 202)
 //   (poll) GET  /payments/:id     → wait for status "authorized"
-//   payee  POST /capture/payload  → get unsigned tx
+//   payee  POST /capture/prepare  → get unsigned tx
 //   payee  signs tx off-chain     → signed tx
 //   payee  POST /capture          → async broadcast (HTTP 202)
 //   (poll) GET  /payments/:id     → wait for status "captured"
@@ -63,7 +63,7 @@ func main() {
 	// Step 3 — Payee builds the unsigned authorize transaction
 	// ----------------------------------------------------------------
 
-	authPayload, err := client.Payments.AuthorizePayload(ctx, createResp.Rail0Id)
+	authPayload, err := client.Payments.AuthorizePrepare(ctx, createResp.Rail0Id)
 	if err != nil {
 		var apiErr *rail0.APIError
 		if errors.As(err, &apiErr) {
@@ -89,7 +89,7 @@ func main() {
 	// Step 4 — Payee prepares and submits a capture transaction
 	// ----------------------------------------------------------------
 
-	capturePayload, err := client.Payments.CapturePayload(ctx, createResp.Rail0Id,
+	capturePayload, err := client.Payments.CapturePrepare(ctx, createResp.Rail0Id,
 		rail0.CapturePaymentRequest{Amount: "50000000"})
 	if err != nil {
 		log.Fatalf("CapturePayload: %v", err)
