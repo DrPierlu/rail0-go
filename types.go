@@ -7,16 +7,7 @@ type OnChainState struct {
 	RefundableAmount Uint256String `json:"refundableAmount"`
 }
 
-// Transaction is a single on-chain operation attempt associated with a payment.
-type Transaction struct {
-	Operation       string `json:"operation"`
-	Status          string `json:"status"`
-	TransactionHash string `json:"transactionHash"`
-	Amount          string `json:"amount,omitempty"`
-	BlockNumber     *int   `json:"blockNumber,omitempty"`
-}
-
-// PaymentResponse is returned by Payments.Get.
+// PaymentResponse is returned by the legacy Payments.Get endpoint.
 type PaymentResponse struct {
 	Rail0Id             Bytes32        `json:"rail0_id"`
 	Status              string         `json:"status"`
@@ -32,27 +23,11 @@ type PaymentResponse struct {
 	FeeReceiver         Address        `json:"fee_receiver"`
 	OnChain             *OnChainState  `json:"on_chain,omitempty"`
 	// Populated only when status = "unsigned" so the payer can sign locally.
-	SigningPayload  *SigningPayload `json:"signing_payload,omitempty"`
+	SigningPayload *SigningPayload `json:"signing_payload,omitempty"`
 	Rail0Contract  Address        `json:"rail0_contract,omitempty"`
-	Transactions   []Transaction  `json:"transactions,omitempty"`
 }
 
-// ReleaseRequest is the optional body for Payments.PrepareRelease.
-// Omit CallerAddress (or leave empty) to build the transaction for the payee;
-// pass the payer address to let the payer submit the release themselves.
-type ReleaseRequest struct {
-	CallerAddress Address `json:"caller_address,omitempty"`
-}
-
-// SubmitTransactionAcceptedResponse is returned by the per-operation submit
-// endpoints (Authorize, Charge, Capture, Void, Release, Refund). HTTP 202.
-// Poll Payments.Get until status advances to the expected terminal state.
-type SubmitTransactionAcceptedResponse struct {
-	Rail0Id string `json:"rail0_id"`
-	Status  string `json:"status"`
-}
-
-// RefundPayloadRequest is the body for Payments.RefundPayload.
+// RefundPayloadRequest is the body for Payments.RefundPrepare.
 // Phase 1 (get signing payload): set only Amount.
 // Phase 2 (get unsigned tx):     set Amount + V, R, S from the signed EIP-3009 payload.
 type RefundPayloadRequest struct {
@@ -62,11 +37,11 @@ type RefundPayloadRequest struct {
 	S      string `json:"s,omitempty"`
 }
 
-// RefundPayloadResponse is returned by Payments.RefundPayload.
+// RefundPayloadResponse is returned by Payments.RefundPrepare.
 // Phase 1: SigningPayload is populated, UnsignedTransaction is empty.
 // Phase 2: UnsignedTransaction is populated (EIP-3009 sig embedded in calldata).
 type RefundPayloadResponse struct {
-	SigningPayload       *SigningPayload `json:"signing_payload,omitempty"`
+	SigningPayload      *SigningPayload `json:"signing_payload,omitempty"`
 	UnsignedTransaction string         `json:"unsigned_transaction,omitempty"`
 }
 
