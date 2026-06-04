@@ -21,6 +21,7 @@ type ListPaymentsParams struct {
 	Payer   string // filter by payer Ethereum address
 	Payee   string // filter by payee Ethereum address
 	Token   string // filter by token contract address
+	Sort    string // sort fields: comma-separated, prefix with - for desc (e.g. "-created_at,amount")
 	Page    int    // page number (1-based); 0 = use server default
 	PerPage int    // items per page; 0 = use server default
 }
@@ -47,6 +48,9 @@ func (s *PaymentsService) List(ctx context.Context, params ...ListPaymentsParams
 		}
 		if p.Token != "" {
 			q.Set("token", p.Token)
+		}
+		if p.Sort != "" {
+			q.Set("sort", p.Sort)
 		}
 		if p.Page > 0 {
 			q.Set("page", fmt.Sprintf("%d", p.Page))
@@ -80,8 +84,8 @@ func (s *PaymentsService) CreatePayment(ctx context.Context, params CreatePaymen
 }
 
 // Get fetches the current payment state (DB status + live on-chain amounts).
-func (s *PaymentsService) Get(ctx context.Context, paymentID Bytes32) (*PaymentSummary, error) {
-	var out PaymentSummary
+func (s *PaymentsService) Get(ctx context.Context, paymentID Bytes32) (*PaymentResponse, error) {
+	var out PaymentResponse
 	if err := s.http.get(ctx, "/payments/"+paymentID, &out); err != nil {
 		return nil, err
 	}
@@ -92,6 +96,7 @@ func (s *PaymentsService) Get(ctx context.Context, paymentID Bytes32) (*PaymentS
 type ListTransactionsParams struct {
 	Operation string // filter by operation type
 	Status    string // filter by transaction status
+	Sort      string // sort fields: comma-separated, prefix with - for desc (e.g. "-submitted_at")
 	Page      int    // page number (1-based); 0 = use server default
 	PerPage   int    // items per page; 0 = use server default
 }
@@ -109,6 +114,9 @@ func (s *PaymentsService) Transactions(ctx context.Context, paymentID Bytes32, p
 		}
 		if p.Status != "" {
 			q.Set("status", p.Status)
+		}
+		if p.Sort != "" {
+			q.Set("sort", p.Sort)
 		}
 		if p.Page > 0 {
 			q.Set("page", fmt.Sprintf("%d", p.Page))

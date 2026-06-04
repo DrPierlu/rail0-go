@@ -3,11 +3,11 @@ package rail0
 // OnChainState holds live on-chain escrow balances for a payment.
 type OnChainState struct {
 	Exists           bool          `json:"exists"`
-	CapturableAmount Uint256String `json:"capturableAmount"`
-	RefundableAmount Uint256String `json:"refundableAmount"`
+	CapturableAmount Uint256String `json:"capturable_amount"`
+	RefundableAmount Uint256String `json:"refundable_amount"`
 }
 
-// PaymentResponse is returned by the legacy Payments.Get endpoint.
+// PaymentResponse is returned by Payments.Get.
 type PaymentResponse struct {
 	Rail0Id             Bytes32        `json:"rail0_id"`
 	Status              string         `json:"status"`
@@ -22,6 +22,10 @@ type PaymentResponse struct {
 	FeeBps              int            `json:"fee_bps"`
 	FeeReceiver         Address        `json:"fee_receiver"`
 	OnChain             *OnChainState  `json:"on_chain,omitempty"`
+	// Machine-readable failure reason. Present only when status=failed.
+	FailureCode    string `json:"failure_code,omitempty"`
+	// Human-readable failure description. Present only when status=failed.
+	FailureMessage string `json:"failure_message,omitempty"`
 	// Populated only when status = "unsigned" so the payer can sign locally.
 	SigningPayload *SigningPayload `json:"signing_payload,omitempty"`
 	Rail0Contract  Address        `json:"rail0_contract,omitempty"`
