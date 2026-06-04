@@ -47,6 +47,7 @@ type RefundPayloadRequest struct {
 type RefundPayloadResponse struct {
 	SigningPayload      *SigningPayload `json:"signing_payload,omitempty"`
 	UnsignedTransaction string         `json:"unsigned_transaction,omitempty"`
+	TransactionId       string         `json:"transaction_id,omitempty"`
 }
 
 // APIErrorBody is the JSON shape of error responses from the RAIL0 API.

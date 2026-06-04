@@ -14,79 +14,32 @@ type AccountsService struct {
 	http *httpClient
 }
 
-// PaymentMethodsFilters holds optional filters for PaymentMethods.
-type PaymentMethodsFilters struct {
-	StablecoinID     string // filter by token id
-	StablecoinSymbol string // filter by token symbol (case-insensitive)
-	BlockchainID     string // filter by blockchain id
-	BlockchainSlug   string // filter by blockchain slug (case-insensitive)
-}
-
-// PaymentMethods returns the active payment methods (chain + token + wallet) for the given account.
-// All non-empty filter fields are applied as AND conditions; discordant filters return an empty slice.
-func (s *AccountsService) PaymentMethods(ctx context.Context, accountID string, filters ...PaymentMethodsFilters) ([]PaymentMethod, error) {
-	var out []PaymentMethod
-	path := fmt.Sprintf("/accounts/%s/payment-methods", accountID)
-
-	if len(filters) > 0 {
-		f := filters[0]
-		q := url.Values{}
-		if f.StablecoinID != "" {
-			q.Set("stablecoin_id", f.StablecoinID)
-		}
-		if f.StablecoinSymbol != "" {
-			q.Set("stablecoin_symbol", f.StablecoinSymbol)
-		}
-		if f.BlockchainID != "" {
-			q.Set("blockchain_id", f.BlockchainID)
-		}
-		if f.BlockchainSlug != "" {
-			q.Set("blockchain_slug", f.BlockchainSlug)
-		}
-		if len(q) > 0 {
-			path = path + "?" + q.Encode()
-		}
-	}
-
-	if err := s.http.get(ctx, path, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
+// ── Public endpoints ──────────────────────────────────────────────────────────
 
 // ListWalletsParams holds optional query parameters for Wallets.
 type ListWalletsParams struct {
-	ChainID     int    // filter by EVM chain ID (0 = no filter)
-	ChainSlug   string // filter by chain slug (e.g. "base")
-	TokenSymbol string // filter by token symbol (e.g. "USDC")
-	Active      *bool  // filter by active flag; nil = no filter
-	Page        int    // page number (1-based); 0 = use server default
-	PerPage     int    // items per page; 0 = use server default
+	Active  *bool  // filter by active flag; nil = no filter
+	Sort    string // sort fields: comma-separated, prefix with - for desc (e.g. "-created_at,label")
+	Page    int    // page number (1-based); 0 = use server default
+	PerPage int    // items per page; 0 = use server default
 }
 
-// Wallets lists the wallet tokens for the given account.
-func (s *AccountsService) Wallets(ctx context.Context, accountID string, params ...ListWalletsParams) (*PaginatedResponse[WalletToken], error) {
-	var out PaginatedResponse[WalletToken]
+// Wallets lists the wallets (with nested tokens) for the given account. Public.
+func (s *AccountsService) Wallets(ctx context.Context, accountID string, params ...ListWalletsParams) (*PaginatedResponse[Wallet], error) {
+	var out PaginatedResponse[Wallet]
 	path := fmt.Sprintf("/accounts/%s/wallets", accountID)
-
 	if len(params) > 0 {
 		p := params[0]
 		q := url.Values{}
-		if p.ChainID != 0 {
-			q.Set("chain_id", fmt.Sprintf("%d", p.ChainID))
-		}
-		if p.ChainSlug != "" {
-			q.Set("chain_slug", p.ChainSlug)
-		}
-		if p.TokenSymbol != "" {
-			q.Set("token_symbol", p.TokenSymbol)
-		}
 		if p.Active != nil {
 			if *p.Active {
 				q.Set("active", "true")
 			} else {
 				q.Set("active", "false")
 			}
+		}
+		if p.Sort != "" {
+			q.Set("sort", p.Sort)
 		}
 		if p.Page > 0 {
 			q.Set("page", fmt.Sprintf("%d", p.Page))
@@ -98,19 +51,172 @@ func (s *AccountsService) Wallets(ctx context.Context, accountID string, params 
 			path = path + "?" + q.Encode()
 		}
 	}
-
 	if err := s.http.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// Wallet fetches a single wallet token by id for the given account.
-func (s *AccountsService) Wallet(ctx context.Context, accountID string, walletID string) (*WalletToken, error) {
-	var out WalletToken
-	path := fmt.Sprintf("/accounts/%s/wallets/%s", accountID, walletID)
+// ── Protected endpoints (require JWT) ────────────────────────────────────────
+
+// Get fetches the account profile for the authenticated merchant.
+func (s *AccountsService) Get(ctx context.Context, accountID string) (*Account, error) {
+	var out Account
+	if err := s.http.get(ctx, fmt.Sprintf("/accounts/%s", accountID), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateAccountRequest holds the fields the merchant can update.
+type UpdateAccountRequest struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+// Update patches the authenticated merchant account.
+func (s *AccountsService) Update(ctx context.Context, accountID string, req UpdateAccountRequest) (*Account, error) {
+	var out Account
+	if err := s.http.put(ctx, fmt.Sprintf("/accounts/%s", accountID), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListAccountPaymentsParams holds optional query parameters for account payments.
+type ListAccountPaymentsParams struct {
+	Status  string
+	Mode    string
+	Token   string
+	Payer   string
+	Sort    string // sort fields: comma-separated, prefix with - for desc (e.g. "-created_at,amount")
+	Page    int
+	PerPage int
+}
+
+// Payments lists payments where this account is the payee (requires JWT).
+func (s *AccountsService) Payments(ctx context.Context, accountID string, params ...ListAccountPaymentsParams) (*PaginatedResponse[PaymentSummary], error) {
+	var out PaginatedResponse[PaymentSummary]
+	path := fmt.Sprintf("/accounts/%s/payments", accountID)
+	if len(params) > 0 {
+		p := params[0]
+		q := url.Values{}
+		if p.Status != "" {
+			q.Set("status", p.Status)
+		}
+		if p.Mode != "" {
+			q.Set("mode", p.Mode)
+		}
+		if p.Token != "" {
+			q.Set("token", p.Token)
+		}
+		if p.Payer != "" {
+			q.Set("payer", p.Payer)
+		}
+		if p.Sort != "" {
+			q.Set("sort", p.Sort)
+		}
+		if p.Page > 0 {
+			q.Set("page", fmt.Sprintf("%d", p.Page))
+		}
+		if p.PerPage > 0 {
+			q.Set("per_page", fmt.Sprintf("%d", p.PerPage))
+		}
+		if len(q) > 0 {
+			path = path + "?" + q.Encode()
+		}
+	}
 	if err := s.http.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ── Wallet management (protected) ────────────────────────────────────────────
+
+// WalletsService exposes wallet and wallet-token management operations.
+type WalletsService struct {
+	http *httpClient
+}
+
+// GetWallet fetches a single wallet with nested tokens (requires JWT).
+func (s *WalletsService) Get(ctx context.Context, walletID string) (*Wallet, error) {
+	var out Wallet
+	if err := s.http.get(ctx, fmt.Sprintf("/wallets/%s", walletID), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CreateWalletRequest is the body for creating a new wallet.
+type CreateWalletRequest struct {
+	Address string `json:"address"`
+	Label   string `json:"label,omitempty"`
+}
+
+// CreateWalletResponse is returned after a wallet is created.
+type CreateWalletResponse struct {
+	ID      string `json:"id"`
+	Address string `json:"address"`
+	Label   string `json:"label,omitempty"`
+	Active  bool   `json:"active"`
+}
+
+// Create adds a new wallet to the authenticated account (requires JWT).
+func (s *WalletsService) Create(ctx context.Context, req CreateWalletRequest) (*CreateWalletResponse, error) {
+	var out CreateWalletResponse
+	if err := s.http.post(ctx, "/wallets", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateWalletRequest holds the fields that can be patched on a wallet.
+type UpdateWalletRequest struct {
+	Label  string `json:"label,omitempty"`
+	Active *bool  `json:"active,omitempty"`
+}
+
+// Update patches label or active on a wallet (requires JWT).
+func (s *WalletsService) Update(ctx context.Context, walletID string, req UpdateWalletRequest) (*CreateWalletResponse, error) {
+	var out CreateWalletResponse
+	if err := s.http.put(ctx, fmt.Sprintf("/wallets/%s", walletID), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// AddTokenRequest is the body for adding a token to a wallet.
+type AddTokenRequest struct {
+	TokenID string `json:"token_id"`
+	Default bool   `json:"default,omitempty"`
+}
+
+// AddToken associates a token with a wallet (requires JWT).
+func (s *WalletsService) AddToken(ctx context.Context, walletID string, req AddTokenRequest) (*WalletTokenItem, error) {
+	var out WalletTokenItem
+	if err := s.http.post(ctx, fmt.Sprintf("/wallets/%s/tokens", walletID), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateTokenRequest holds the fields that can be patched on a wallet token.
+type UpdateTokenRequest struct {
+	Default *bool `json:"default,omitempty"`
+	Active  *bool `json:"active,omitempty"`
+}
+
+// UpdateToken patches a wallet token entry (requires JWT).
+func (s *WalletsService) UpdateToken(ctx context.Context, walletID, tokenID string, req UpdateTokenRequest) (*WalletTokenItem, error) {
+	var out WalletTokenItem
+	if err := s.http.put(ctx, fmt.Sprintf("/wallets/%s/tokens/%s", walletID, tokenID), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RemoveToken hard-deletes a wallet token. Requires JWT.
+func (s *WalletsService) RemoveToken(ctx context.Context, walletID, tokenID string) error {
+	return s.http.delete(ctx, fmt.Sprintf("/wallets/%s/tokens/%s", walletID, tokenID), nil)
 }

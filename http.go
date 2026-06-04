@@ -128,6 +128,10 @@ func (c *httpClient) put(ctx context.Context, path string, body any, out any) er
 	return c.do(ctx, http.MethodPut, path, body, out)
 }
 
+func (c *httpClient) delete(ctx context.Context, path string, out any) error {
+	return c.do(ctx, http.MethodDelete, path, nil, out)
+}
+
 func (c *httpClient) do(ctx context.Context, method, path string, body any, out any) error {
 	url := c.baseURL + path
 	maxAttempts := c.maxRetries + 1
@@ -215,8 +219,10 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 			return apiErr
 		}
 
-		if err := json.Unmarshal(raw, out); err != nil {
-			return fmt.Errorf("rail0: decode response: %w", err)
+		if out != nil && len(raw) > 0 {
+			if err := json.Unmarshal(raw, out); err != nil {
+				return fmt.Errorf("rail0: decode response: %w", err)
+			}
 		}
 		if c.logger != nil {
 			c.logger(LogEntry{
