@@ -23,7 +23,6 @@ type Account struct {
 	Id string `json:"id"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
-	FeeBps *int `json:"fee_bps,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
@@ -154,10 +153,6 @@ type PaymentConfig struct {
 	Amount Uint256String `json:"amount"`
 	// Unix timestamp (seconds). Capture must happen before this; release opens after.
 	AuthorizationExpiry int64 `json:"authorization_expiry"`
-	// Fee in basis points (0 = no fee, 10000 = 100%).
-	FeeBps int `json:"fee_bps"`
-	// Recipient of the fee on each capture. Use the zero address when fee_bps is 0.
-	FeeReceiver Address `json:"fee_receiver"`
 	// Account address. Authorized to capture, void, and refund.
 	Payee Address `json:"payee"`
 	// Buyer address. Funds are pulled from this address.
@@ -168,7 +163,7 @@ type PaymentConfig struct {
 	Token Address `json:"token"`
 }
 
-// PaymentInput Buyer-supplied payment parameters. Policy fields (authorization_expiry, refund_expiry, fee_bps, fee_receiver) are fixed API configuration applied server-side.
+// PaymentInput Buyer-supplied payment parameters. Policy fields (authorization_expiry, refund_expiry) are fixed API configuration applied server-side.
 type PaymentInput struct {
 	// Amount to pay (in token base units).
 	Amount Uint256String `json:"amount"`

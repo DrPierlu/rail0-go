@@ -19,8 +19,6 @@ type PaymentResponse struct {
 	ChainID             int            `json:"chain_id"`
 	AuthorizationExpiry int64          `json:"authorization_expiry"`
 	RefundExpiry        int64          `json:"refund_expiry"`
-	FeeBps              int            `json:"fee_bps"`
-	FeeReceiver         Address        `json:"fee_receiver"`
 	OnChain             *OnChainState  `json:"on_chain,omitempty"`
 	// Machine-readable failure reason. Present only when status=failed.
 	FailureCode    string `json:"failure_code,omitempty"`
