@@ -12,11 +12,17 @@ type ChainsService struct {
 
 // Blockchain is a supported EVM chain.
 type Blockchain struct {
-	ChainID     int    `json:"chain_id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	NetworkType string `json:"network_type"`
-	ExplorerURL string `json:"explorer_url"`
+	ID           string `json:"id"`
+	ChainID      int    `json:"chain_id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	NativeSymbol string `json:"native_symbol"`
+	NetworkType  string `json:"network_type"`
+	RpcURL       string `json:"rpc_url"`
+	ExplorerURL  string `json:"explorer_url"`
+	Active       bool   `json:"active"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
 }
 
 // List returns all active blockchains.

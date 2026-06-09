@@ -23,19 +23,22 @@ client := rail0.NewClient(rail0.ClientOptions{
 })
 ctx := context.Background()
 
-// Discover the account's wallets and pick a payment method
+// List wallets for an account and pick one
 wallets, _ := client.Accounts.Wallets(ctx, "account-uuid")
-w := wallets.Data[0]
-token := w.Tokens[0]
+wallet := wallets[0]
+
+// List tokens accepted by that wallet
+tokens, _ := client.Wallets.Tokens(ctx, wallet.ID)
+usdc := tokens[0] // Token with nested Blockchain
 
 // Create a payment intent
-resp, _ := client.Payments.Create(ctx, rail0.CreatePaymentRequest{
-    ChainID: token.ChainID,
+resp, _ := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
+    ChainId: usdc.Blockchain.ChainID,
     Mode:    "authorize",
     Amount:  "50000000", // 50 USDC (6 decimals)
     Payer:   "0xBuyer...",
-    Payee:   w.Address,
-    Token:   token.TokenAddress,
+    Payee:   wallet.Address,
+    Token:   usdc.Address,
 })
 ```
 
@@ -43,61 +46,64 @@ resp, _ := client.Payments.Create(ctx, rail0.CreatePaymentRequest{
 
 | Service | Description |
 |---------|-------------|
-| `client.Accounts` | Account profile, wallet listing, merchant payments |
-| `client.Wallets` | Wallet and wallet-token management (requires JWT) |
+| `client.Accounts` | Wallet CRUD scoped to an account |
+| `client.Wallets` | Wallet token queries |
 | `client.Payments` | Full payment lifecycle |
 | `client.Auth` | SIWE authentication |
 | `client.Chains` | Blockchain catalog |
-| `client.Tokens` | Token catalog |
+| `client.Tokens` | Flat token catalog |
 
 ## Accounts
 
 ```go
-// Public — list wallets with nested tokens
+// List wallets for an account (no auth required)
+wallets, _ := client.Accounts.Wallets(ctx, accountID)
 wallets, _ := client.Accounts.Wallets(ctx, accountID, rail0.ListWalletsParams{
-    Sort:    "-created_at",
     PerPage: 50,
 })
 
-// Protected — account profile
-account, _ := client.Accounts.Get(ctx, accountID)
+// Get a single wallet
+wallet, _ := client.Accounts.GetWallet(ctx, accountID, walletID)
 
-// Protected — update profile
-account, _ := client.Accounts.Update(ctx, accountID, rail0.UpdateAccountRequest{
-    Email: "new@example.com",
-})
-
-// Protected — payments where this account is payee
-payments, _ := client.Accounts.Payments(ctx, accountID, rail0.ListAccountPaymentsParams{
-    Status: "authorized",
-    Sort:   "-created_at,amount",
-})
-```
-
-## Wallets (protected)
-
-```go
-// List wallets with tokens
-wallet, _ := client.Wallets.Get(ctx, walletID)
-
-// Create
-w, _ := client.Wallets.Create(ctx, rail0.CreateWalletRequest{
+// Create a wallet (requires JWT)
+wallet, _ := client.Accounts.CreateWallet(ctx, accountID, rail0.CreateWalletRequest{
     Address: "0xABC...",
     Label:   "Treasury",
 })
 
-// Update
-client.Wallets.Update(ctx, walletID, rail0.UpdateWalletRequest{Label: "Main"})
-
-// Add a token
-client.Wallets.AddToken(ctx, walletID, rail0.AddTokenRequest{TokenID: tokenID})
-
-// Update a token
+// Update a wallet (requires JWT)
 active := false
-client.Wallets.UpdateToken(ctx, walletID, tokenID, rail0.UpdateTokenRequest{Active: &active})
+wallet, _ = client.Accounts.UpdateWallet(ctx, accountID, walletID, rail0.UpdateWalletRequest{
+    Label:  "Archived",
+    Active: &active,
+})
 
-// Remove a token (hard delete)
-client.Wallets.RemoveToken(ctx, walletID, tokenID)
+// Delete a wallet (requires JWT)
+err := client.Accounts.DeleteWallet(ctx, accountID, walletID)
+```
+
+## Wallets
+
+```go
+// List tokens accepted by a wallet
+tokens, _ := client.Wallets.Tokens(ctx, walletID)
+tokens, _ := client.Wallets.Tokens(ctx, walletID, rail0.ListWalletTokensParams{
+    Symbol: "USDC",
+})
+// tokens[0] is a Token with a nested Blockchain object
+// tokens[0].Blockchain.ChainID, .Name, .Slug, .RpcURL
+```
+
+## Chains and Tokens
+
+```go
+// All supported blockchains
+chains, _ := client.Chains.List(ctx)
+// chains[0].ChainID, .Name, .Slug, .NativeSymbol, .RpcURL, .ExplorerURL
+
+// Flat token catalog
+tokens, _ := client.Tokens.List(ctx)
+// tokens[0] is a CatalogToken: .ChainID, .ChainSlug, .Symbol, .Address, .Decimals
 ```
 
 ## Payments
@@ -105,15 +111,21 @@ client.Wallets.RemoveToken(ctx, walletID, tokenID)
 ```go
 // List (requires JWT)
 payments, _ := client.Payments.List(ctx, rail0.ListPaymentsParams{
-    Status: "authorized",
-    Sort:   "-created_at",
+    Sort: "-created_at",
 })
 
 // Get
 p, _ := client.Payments.Get(ctx, rail0ID)
 
 // Create
-resp, _ := client.Payments.Create(ctx, rail0.CreatePaymentRequest{...})
+resp, _ := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
+    ChainId: 5042002,
+    Mode:    "authorize",
+    Amount:  "50000000",
+    Payer:   "0xBuyer...",
+    Payee:   "0xMerchant...",
+    Token:   "0xUSDC...",
+})
 
 // Submit payer signature
 client.Payments.Sign(ctx, rail0ID, rail0.PayerSignatureRequest{Signature: "0x..."})
@@ -132,21 +144,6 @@ txs, _ := client.Payments.Transactions(ctx, rail0ID, rail0.ListTransactionsParam
     Sort: "-submitted_at",
 })
 ```
-
-## Sorting
-
-List endpoints accept a `Sort` field using JSON:API convention:
-
-- `"created_at"` — ascending
-- `"-created_at"` — descending
-- `"-created_at,amount"` — multiple fields, left-to-right priority
-
-| Method | Allowed sort fields |
-|--------|-------------------|
-| `Accounts.Wallets` | `created_at`, `label`, `address` |
-| `Accounts.Payments` | `created_at`, `amount`, `status`, `authorization_expiry` |
-| `Payments.List` | `created_at`, `amount`, `status`, `authorization_expiry` |
-| `Payments.Transactions` | `submitted_at`, `confirmed_at`, `operation` |
 
 ## Authentication (SIWE)
 

@@ -8,15 +8,15 @@ package rail0
 
 // Client is the entry point for the RAIL0 SDK.
 type Client struct {
-	// Accounts exposes account profile and public wallet listing.
+	// Accounts exposes wallet CRUD under /accounts/:id/wallets.
 	Accounts *AccountsService
-	// Wallets exposes wallet and wallet-token management (requires JWT).
+	// Wallets exposes GET /wallets/:id/tokens.
 	Wallets *WalletsService
 	// Auth exposes SIWE authentication: GetNonce, Verify.
 	Auth *AuthService
 	// Chains exposes the supported blockchain catalog.
 	Chains *ChainsService
-	// Tokens exposes the supported token catalog.
+	// Tokens exposes the flat token catalog (GET /tokens).
 	Tokens *TokensService
 	// Payments exposes the full payment lifecycle.
 	Payments *PaymentsService

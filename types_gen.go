@@ -287,21 +287,44 @@ type TransactionRecord struct {
 }
 
 // WalletToken A wallet token configuration linking a wallet address to a specific token on a chain.
+// WalletToken is a denormalized join of wallet + token + chain fields.
+// Useful when the full context is needed without nesting.
 type WalletToken struct {
-	Active bool `json:"active"`
-	// Ethereum wallet address.
-	Address Address `json:"address"`
-	ChainId int `json:"chain_id"`
-	ChainName string `json:"chain_name"`
-	ChainSlug string `json:"chain_slug"`
-	Default bool `json:"default"`
-	Id string `json:"id"`
+	ID           string  `json:"id"`
+	WalletID     string  `json:"wallet_id"`
+	Address      Address `json:"address"`
+	Label        string  `json:"label,omitempty"`
+	Default      bool    `json:"default"`
+	Active       bool    `json:"active"`
+	TokenID      string  `json:"token_id"`
+	TokenSymbol  string  `json:"token_symbol"`
 	TokenAddress Address `json:"token_address"`
-	TokenDecimals int `json:"token_decimals"`
-	TokenId string `json:"token_id"`
-	TokenSymbol string `json:"token_symbol"`
-	WalletId string `json:"wallet_id"`
-	Label string `json:"label,omitempty"`
+	TokenDecimals int    `json:"token_decimals"`
+	ChainID      int     `json:"chain_id"`
+	ChainName    string  `json:"chain_name"`
+	ChainSlug    string  `json:"chain_slug"`
+}
+
+// Token is the full token entity returned by GET /wallets/:id/tokens.
+// It includes a nested Blockchain object.
+type Token struct {
+	ID         string     `json:"id"`
+	Symbol     string     `json:"symbol"`
+	Address    Address    `json:"address"`
+	Decimals   int        `json:"decimals"`
+	Active     bool       `json:"active"`
+	Blockchain Blockchain `json:"blockchain"`
+	CreatedAt  string     `json:"created_at"`
+	UpdatedAt  string     `json:"updated_at"`
+}
+
+// CatalogToken is the flat token shape returned by GET /tokens.
+type CatalogToken struct {
+	ChainID   int     `json:"chain_id"`
+	ChainSlug string  `json:"chain_slug"`
+	Symbol    string  `json:"symbol"`
+	Address   Address `json:"address"`
+	Decimals  int     `json:"decimals"`
 }
 
 // PageMeta holds pagination metadata returned by list endpoints.
@@ -317,26 +340,14 @@ type PaginatedResponse[T any] struct {
 	Meta PageMeta `json:"meta"`
 }
 
-// WalletTokenItem is a single token entry nested inside a Wallet.
-type WalletTokenItem struct {
-	ID            string `json:"id"`
-	TokenID       string `json:"token_id"`
-	TokenSymbol   string `json:"token_symbol"`
-	TokenAddress  string `json:"token_address"`
-	TokenDecimals int    `json:"token_decimals"`
-	ChainID       int    `json:"chain_id"`
-	ChainName     string `json:"chain_name"`
-	ChainSlug     string `json:"chain_slug"`
-	Default       bool   `json:"default"`
-	Active        bool   `json:"active"`
-}
-
-// Wallet is a merchant wallet with its associated token configurations.
+// Wallet is an EVM wallet address registered to an account.
 type Wallet struct {
-	ID      string            `json:"id"`
-	Address string            `json:"address"`
-	Label   string            `json:"label,omitempty"`
-	Active  bool              `json:"active"`
-	Tokens  []WalletTokenItem `json:"tokens"`
+	ID        string `json:"id"`
+	AccountID string `json:"account_id"`
+	Address   Address `json:"address"`
+	Label     string `json:"label,omitempty"`
+	Active    bool   `json:"active"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
