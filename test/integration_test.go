@@ -157,9 +157,12 @@ const integrationSignature = "0xabababababababababababababababababababababababab
 func TestIntegration_CreatePayment(t *testing.T) {
 	client := newTestServer(t)
 	res, err := client.Payments.CreatePayment(context.Background(), rail0.CreatePaymentRequest{
-		Payment: integrationPayment,
 		ChainId: 8453,
 		Mode:    "authorize",
+		Amount:  integrationPayment.Amount,
+		Token:   integrationPayment.Token,
+		Payer:   integrationPayment.Payer,
+		Payee:   integrationPayment.Payee,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -15,14 +15,12 @@ func main() {
 	client := rail0.NewClient(rail0.ClientOptions{BaseURL: "https://api.rail0.xyz"})
 
 	createResp, err := client.Payments.CreatePayment(ctx, rail0.CreatePaymentRequest{
-		Payment: rail0.PaymentInput{
-			Payer:  "0xBuyerAddress000000000000000000000000000000",
-			Payee:  "0xMerchantAddress0000000000000000000000000000",
-			Token:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-			Amount: "25000000",
-		},
 		ChainId: 8453,
 		Mode:    "charge",
+		Amount:  "25000000",
+		Token:   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+		Payer:   "0xBuyerAddress000000000000000000000000000000",
+		Payee:   "0xMerchantAddress0000000000000000000000000000",
 	})
 	if err != nil {
 		log.Fatalf("CreatePayment: %v", err)

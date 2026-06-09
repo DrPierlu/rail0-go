@@ -128,6 +128,10 @@ func (c *httpClient) put(ctx context.Context, path string, body any, out any) er
 	return c.do(ctx, http.MethodPut, path, body, out)
 }
 
+func (c *httpClient) patch(ctx context.Context, path string, body any, out any) error {
+	return c.do(ctx, http.MethodPatch, path, body, out)
+}
+
 func (c *httpClient) delete(ctx context.Context, path string, out any) error {
 	return c.do(ctx, http.MethodDelete, path, nil, out)
 }
