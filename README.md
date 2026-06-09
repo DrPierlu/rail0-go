@@ -30,14 +30,12 @@ token := w.Tokens[0]
 
 // Create a payment intent
 resp, _ := client.Payments.Create(ctx, rail0.CreatePaymentRequest{
-    Payment: rail0.PaymentInput{
-        Payer:  "0xBuyer...",
-        Payee:  w.Address,
-        Token:  token.TokenAddress,
-        Amount: "50000000", // 50 USDC (6 decimals)
-    },
-    ChainId: token.ChainID,
+    ChainID: token.ChainID,
     Mode:    "authorize",
+    Amount:  "50000000", // 50 USDC (6 decimals)
+    Payer:   "0xBuyer...",
+    Payee:   w.Address,
+    Token:   token.TokenAddress,
 })
 ```
 
