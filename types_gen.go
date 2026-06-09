@@ -48,13 +48,20 @@ type ConfirmTransactionRequest struct {
 type CreatePaymentRequest struct {
 	// EVM chain ID of the target network.
 	ChainId int `json:"chain_id"`
-	Payment PaymentInput `json:"payment"`
+	// `authorize` — funds held in escrow, captured later. `charge` — one-shot: funds immediately distributed. The two modes use different EIP-3009 nonce prefixes; a signature for one cannot be reused for the other.
+	Mode string `json:"mode"`
+	// Amount to pay (in token base units).
+	Amount Uint256String `json:"amount"`
+	// ERC-20 token address (token_address from GET /accounts/{id}/wallets).
+	Token Address `json:"token"`
+	// Buyer address. Funds are pulled from this address.
+	Payer Address `json:"payer"`
+	// Account wallet address (wallet_address from GET /accounts/{id}/wallets).
+	Payee Address `json:"payee"`
 	// Optional human-readable payment label visible to the payer (e.g. "Order #123 — Acme Store").
 	Description string `json:"description,omitempty"`
 	// Arbitrary key-value data for custom reconciliation. Set at creation and immutable. Max 4 KB.
 	Metadata *any `json:"metadata,omitempty"`
-	// `authorize` — funds held in escrow, captured later. `charge` — one-shot: funds immediately distributed. The two modes use different EIP-3009 nonce prefixes; a signature for one cannot be reused for the other.
-	Mode string `json:"mode,omitempty"`
 }
 
 // CreatePaymentResponse
